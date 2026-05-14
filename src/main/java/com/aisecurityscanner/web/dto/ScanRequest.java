@@ -8,10 +8,13 @@ public class ScanRequest {
 
     @NotBlank
     private String targetPath;
-    private String semgrepConfig = "auto";
+    private String semgrepConfig = "semgrep-rules/offline-security.yml";
+    private boolean fastScan = true;
     private boolean llmEnabled;
     private boolean includeDependencyAudit = true;
     private int maxFindingsForLlm = 15;
+    private boolean autoImportAgentFindings;
+    private String agentCommand;
     private List<ExternalFindingRequest> externalFindings = new ArrayList<ExternalFindingRequest>();
 
     public String getTargetPath() {
@@ -38,6 +41,14 @@ public class ScanRequest {
         this.llmEnabled = llmEnabled;
     }
 
+    public boolean isFastScan() {
+        return fastScan;
+    }
+
+    public void setFastScan(boolean fastScan) {
+        this.fastScan = fastScan;
+    }
+
     public boolean isIncludeDependencyAudit() {
         return includeDependencyAudit;
     }
@@ -52,6 +63,22 @@ public class ScanRequest {
 
     public void setMaxFindingsForLlm(int maxFindingsForLlm) {
         this.maxFindingsForLlm = maxFindingsForLlm;
+    }
+
+    public boolean isAutoImportAgentFindings() {
+        return autoImportAgentFindings;
+    }
+
+    public void setAutoImportAgentFindings(boolean autoImportAgentFindings) {
+        this.autoImportAgentFindings = autoImportAgentFindings;
+    }
+
+    public String getAgentCommand() {
+        return agentCommand;
+    }
+
+    public void setAgentCommand(String agentCommand) {
+        this.agentCommand = agentCommand;
     }
 
     public List<ExternalFindingRequest> getExternalFindings() {

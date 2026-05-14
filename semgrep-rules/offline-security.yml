@@ -1,0 +1,57 @@
+rules:
+  - id: java-runtime-exec
+    message: User-controlled input reaching Runtime.exec may allow command injection.
+    severity: ERROR
+    languages: [java]
+    pattern: Runtime.getRuntime().exec($CMD)
+    metadata:
+      owasp: OWASP A03:2021 - Injection
+      cwe: CWE-78
+
+  - id: java-processbuilder-user-input
+    message: ProcessBuilder with untrusted input can lead to command injection.
+    severity: WARNING
+    languages: [java]
+    pattern: new ProcessBuilder($ARGS)
+    metadata:
+      owasp: OWASP A03:2021 - Injection
+      cwe: CWE-78
+
+  - id: python-subprocess-shell-true
+    message: subprocess with shell=True can execute injected commands.
+    severity: ERROR
+    languages: [python]
+    pattern: subprocess.$FUNC(..., shell=True, ...)
+    metadata:
+      owasp: OWASP A03:2021 - Injection
+      cwe: CWE-78
+
+  - id: python-eval-exec
+    message: eval/exec on untrusted input can result in arbitrary code execution.
+    severity: ERROR
+    languages: [python]
+    pattern-either:
+      - pattern: eval($X)
+      - pattern: exec($X)
+    metadata:
+      owasp: OWASP A03:2021 - Injection
+      cwe: CWE-94
+
+  - id: js-eval
+    message: eval on untrusted data can enable code injection.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: eval($X)
+    metadata:
+      owasp: OWASP A03:2021 - Injection
+      cwe: CWE-95
+
+  - id: js-innerhtml
+    message: Assigning untrusted content to innerHTML may enable XSS.
+    severity: WARNING
+    languages: [javascript, typescript]
+    pattern: $EL.innerHTML = $VALUE
+    metadata:
+      owasp: OWASP A03:2021 - Injection
+      cwe: CWE-79
+

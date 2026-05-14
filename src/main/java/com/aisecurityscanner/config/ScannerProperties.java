@@ -1,11 +1,15 @@
 package com.aisecurityscanner.config;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "scanner")
 public class ScannerProperties {
 
     private final Semgrep semgrep = new Semgrep();
+    private final Agent agent = new Agent();
     private final Llm llm = new Llm();
     private final Report report = new Report();
     private final Cli cli = new Cli();
@@ -16,6 +20,10 @@ public class ScannerProperties {
 
     public Llm getLlm() {
         return llm;
+    }
+
+    public Agent getAgent() {
+        return agent;
     }
 
     public Report getReport() {
@@ -30,6 +38,17 @@ public class ScannerProperties {
         private String command = "semgrep";
         private String defaultConfig = "auto";
         private int timeoutSeconds = 300;
+        private int jobs = 4;
+        private int fastRuleTimeoutSeconds = 10;
+        private List<String> fastExcludes = new ArrayList<String>(Arrays.asList(
+            ".git",
+            "node_modules",
+            "target",
+            "build",
+            "dist",
+            ".venv",
+            "venv"
+        ));
 
         public String getCommand() {
             return command;
@@ -45,6 +64,60 @@ public class ScannerProperties {
 
         public void setDefaultConfig(String defaultConfig) {
             this.defaultConfig = defaultConfig;
+        }
+
+        public int getTimeoutSeconds() {
+            return timeoutSeconds;
+        }
+
+        public void setTimeoutSeconds(int timeoutSeconds) {
+            this.timeoutSeconds = timeoutSeconds;
+        }
+
+        public int getJobs() {
+            return jobs;
+        }
+
+        public void setJobs(int jobs) {
+            this.jobs = jobs;
+        }
+
+        public int getFastRuleTimeoutSeconds() {
+            return fastRuleTimeoutSeconds;
+        }
+
+        public void setFastRuleTimeoutSeconds(int fastRuleTimeoutSeconds) {
+            this.fastRuleTimeoutSeconds = fastRuleTimeoutSeconds;
+        }
+
+        public List<String> getFastExcludes() {
+            return fastExcludes;
+        }
+
+        public void setFastExcludes(List<String> fastExcludes) {
+            this.fastExcludes = fastExcludes;
+        }
+    }
+
+    public static class Agent {
+        private boolean enabled;
+        private String command;
+        private int timeoutSeconds = 180;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getCommand() {
+            return command;
+        }
+
+        public void setCommand(String command) {
+            this.command = command;
         }
 
         public int getTimeoutSeconds() {

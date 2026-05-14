@@ -3,4 +3,5 @@ target/
 *.iml
 *.log
 .env
+security-report.md
 

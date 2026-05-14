@@ -7,6 +7,7 @@ import com.aisecurityscanner.model.SecurityScanReport;
 import com.aisecurityscanner.model.SemgrepFinding;
 import com.aisecurityscanner.model.StackType;
 import com.aisecurityscanner.model.TriageResult;
+import com.aisecurityscanner.web.dto.ExternalFindingRequest;
 import com.aisecurityscanner.web.dto.ScanRequest;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,6 +28,7 @@ public class ScanOrchestratorService {
     private final LlmTriageService llmTriageService;
     private final DependencyAuditService dependencyAuditService;
     private final ComplexityAnalyzerService complexityAnalyzerService;
+    private final AgentFindingService agentFindingService;
     private final ReportAssemblerService reportAssemblerService;
 
     public ScanOrchestratorService(ScannerProperties properties,
@@ -36,6 +38,7 @@ public class ScanOrchestratorService {
                                    LlmTriageService llmTriageService,
                                    DependencyAuditService dependencyAuditService,
                                    ComplexityAnalyzerService complexityAnalyzerService,
+                                   AgentFindingService agentFindingService,
                                    ReportAssemblerService reportAssemblerService) {
         this.properties = properties;
         this.projectDiscoveryService = projectDiscoveryService;
@@ -44,6 +47,7 @@ public class ScanOrchestratorService {
         this.llmTriageService = llmTriageService;
         this.dependencyAuditService = dependencyAuditService;
         this.complexityAnalyzerService = complexityAnalyzerService;
+        this.agentFindingService = agentFindingService;
         this.reportAssemblerService = reportAssemblerService;
     }
 
@@ -56,7 +60,7 @@ public class ScanOrchestratorService {
         Set<StackType> stacks = projectDiscoveryService.detectStacks(targetPath);
         int filesScanned = projectDiscoveryService.countFiles(targetPath);
         List<String> attackSurface = projectDiscoveryService.discoverAttackSurface(targetPath);
-        List<SemgrepFinding> semgrepFindings = semgrepService.scan(targetPath, request.getSemgrepConfig());
+        List<SemgrepFinding> semgrepFindings = semgrepService.scan(targetPath, request.getSemgrepConfig(), request.isFastScan());
 
         List<TriageResult> triageResults = new ArrayList<TriageResult>();
         int llmLimit = request.getMaxFindingsForLlm() > 0 ? request.getMaxFindingsForLlm() : properties.getReport().getMaxFindingsForLlm();
@@ -77,6 +81,14 @@ public class ScanOrchestratorService {
             .limit(10)
             .collect(Collectors.toList());
 
+        List<ExternalFindingRequest> mergedExternalFindings = new ArrayList<ExternalFindingRequest>();
+        if (request.getExternalFindings() != null) {
+            mergedExternalFindings.addAll(request.getExternalFindings());
+        }
+        if (request.isAutoImportAgentFindings() || properties.getAgent().isEnabled()) {
+            mergedExternalFindings.addAll(agentFindingService.collect(targetPath, request.isAutoImportAgentFindings(), request.getAgentCommand()));
+        }
+
         return reportAssemblerService.assemble(
             targetPath.toString(),
             new ArrayList<StackType>(stacks),
@@ -84,7 +96,7 @@ public class ScanOrchestratorService {
             attackSurface,
             semgrepFindings,
             triageResults,
-            request.getExternalFindings() == null ? new ArrayList<com.aisecurityscanner.web.dto.ExternalFindingRequest>() : request.getExternalFindings(),
+            mergedExternalFindings,
             dependencyFindings,
             complexityHotspots
         );

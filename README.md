@@ -45,7 +45,13 @@ Default settings live in `src/main/resources/application.properties`.
 Key properties:
 
 - `scanner.semgrep.command`: Semgrep executable, default `semgrep`
-- `scanner.semgrep.default-config`: default rule config, default `auto`
+- `scanner.semgrep.default-config`: default rule config, default `semgrep-rules/offline-security.yml` (offline/local)
+- `scanner.semgrep.jobs`: parallel workers for Semgrep, default `4`
+- `scanner.semgrep.fast-rule-timeout-seconds`: per-rule timeout used in fast scan mode
+- `scanner.semgrep.fast-excludes`: comma-separated directories excluded in fast scan mode
+- `scanner.agent.enabled`: enable automatic external security agent ingestion
+- `scanner.agent.command`: command to run external agent (supports `{targetPath}` placeholder)
+- `scanner.agent.timeout-seconds`: timeout for external agent execution
 - `scanner.llm.enabled`: enables/disables LLM enrichment
 - `scanner.llm.base-url`: GitHub Models chat completions endpoint (or compatible)
 - `scanner.llm.api-key`: API key
@@ -89,6 +95,26 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/scans/report" -Co
 ### 4) Generate the SonarQube-style Markdown report
 
 ```powershell
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/scans/report/markdown" -ContentType "application/json" -Body $body
+```
+
+### 5) Fast Semgrep scan mode (recommended for large repos)
+
+Set `fastScan` to `true` in the request to apply Semgrep performance flags and default exclusions:
+
+```powershell
+$body = @'
+{
+  "targetPath": "C:/Users/ssi51/Documents/Project/AISecurityScanner",
+  "semgrepConfig": "p/java",
+  "fastScan": true,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": []
+}
+'@
+
 Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/scans/report/markdown" -ContentType "application/json" -Body $body
 ```
 
@@ -148,6 +174,47 @@ mvn spring-boot:run
 
 Then re-run the report request with `llmEnabled: true` to get AI-powered explanations and remediation suggestions.
 
+### 5) Automatically merge findings from your external security agent
+
+You can run your existing security agent automatically during the scan and merge findings into the final report.
+
+Set agent command once in the terminal where you start the API:
+
+```powershell
+$env:SCANNER_AGENT_ENABLED = "true"
+$env:SCANNER_AGENT_COMMAND = "python C:/tools/security_agent.py --target {targetPath} --format json"
+mvn spring-boot:run
+```
+
+Then enable automatic import in the request:
+
+```powershell
+$repoPath = "C:\path\to\your-repo"
+$body = @{
+    targetPath = $repoPath
+    semgrepConfig = "p/java"
+    fastScan = $true
+    llmEnabled = $false
+    includeDependencyAudit = $true
+    autoImportAgentFindings = $true
+    externalFindings = @()
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8080/api/scans/report/markdown" `
+  -ContentType "application/json" `
+  -Body $body | Out-File "security-report.md"
+```
+
+The external agent command must output JSON as either:
+- an array of findings, or
+- an object with a `findings` array
+
+When `SCANNER_AGENT_ENABLED=true`, the agent is automatically executed for every scan request and its findings are merged with Semgrep results.
+
+Each finding should include fields like `id`, `title`, `severity`, `filePath`, `line`, `rule`, `stack`, `evidence`, `taintChain`, and `fix`.
+
 ## Run in CLI mode for CI
 
 ```powershell
@@ -161,6 +228,34 @@ If the quality gate fails and `scanner.cli.fail-on-quality-gate=true`, the proce
 ```powershell
 python -m pip install semgrep
 semgrep --version
+```
+
+### Semgrep SSL/certificate troubleshooting
+
+If you see an error like `SSLCertVerificationError` for `semgrep.dev`, your environment likely requires a corporate CA bundle.
+
+Use one of these options:
+
+1) Keep scans offline using local rules (default in this project):
+
+```powershell
+semgrep scan --config semgrep-rules/offline-security.yml --json C:/path/to/repo
+```
+
+2) If you must use hosted configs like `auto` or `p/java`, set CA bundle environment variables first:
+
+```powershell
+$env:REQUESTS_CA_BUNDLE = "C:\path\to\corp-ca.pem"
+$env:SSL_CERT_FILE = "C:\path\to\corp-ca.pem"
+
+semgrep scan --config auto --json C:/path/to/repo
+```
+
+3) For API mode, you can force local rules explicitly:
+
+```powershell
+$env:SCANNER_SEMGREP_DEFAULT_CONFIG = "semgrep-rules/offline-security.yml"
+mvn spring-boot:run
 ```
 
 ## LLM / GitHub Copilot style integration

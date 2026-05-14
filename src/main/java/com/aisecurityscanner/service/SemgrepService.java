@@ -17,6 +17,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
 
@@ -31,29 +34,47 @@ public class SemgrepService {
         this.objectMapper = objectMapper;
     }
 
-    public List<SemgrepFinding> scan(Path targetPath, String semgrepConfig) {
+    public List<SemgrepFinding> scan(Path targetPath, String semgrepConfig, boolean fastScan) {
         String configToUse = semgrepConfig == null || semgrepConfig.trim().isEmpty()
             ? properties.getSemgrep().getDefaultConfig()
             : semgrepConfig.trim();
 
+        ScanAttemptResult attempt = attemptScan(targetPath, configToUse, fastScan);
+        if (attempt.findings != null) {
+            return attempt.findings;
+        }
+
+        // Auto-fallback: if remote registry config (e.g. "auto", "p/...") fails due to SSL/network issues,
+        // transparently retry with local offline rules so endpoints stay reliable.
+        if (isRemoteConfig(configToUse) && containsRemoteFailure(attempt.combinedFailures)) {
+            String localFallback = "semgrep-rules/offline-security.yml";
+            ScanAttemptResult fallback = attemptScan(targetPath, localFallback, fastScan);
+            if (fallback.findings != null) {
+                return fallback.findings;
+            }
+            throw new IllegalStateException(
+                "Semgrep registry config '" + configToUse + "' failed due to SSL/network and local fallback also failed: "
+                    + fallback.combinedFailures);
+        }
+        throw new IllegalStateException("Failed to execute Semgrep. Tried multiple launch commands: " + attempt.combinedFailures);
+    }
+
+    private ScanAttemptResult attemptScan(Path targetPath, String configToUse, boolean fastScan) {
+        List<String> semgrepArgs = buildSemgrepArgs(targetPath, configToUse, fastScan);
         List<List<String>> commandCandidates = buildCommandCandidates();
         List<String> failures = new ArrayList<String>();
         for (List<String> commandPrefix : commandCandidates) {
             List<String> command = new ArrayList<String>(commandPrefix);
-            command.addAll(Arrays.asList(
-                "scan",
-                "--config",
-                configToUse,
-                "--json",
-                targetPath.toAbsolutePath().toString()
-            ));
+            command.addAll(semgrepArgs);
             try {
                 CommandExecutionResult result = executeCommand(command);
                 if (result.exitCode != 0 && result.exitCode != 1) {
                     failures.add(String.join(" ", commandPrefix) + " -> exit code " + result.exitCode + ": " + result.stderr.trim());
                     continue;
                 }
-                return parse(result.stdout);
+                ScanAttemptResult success = new ScanAttemptResult();
+                success.findings = parse(result.stdout);
+                return success;
             } catch (IOException ex) {
                 failures.add(String.join(" ", commandPrefix) + " -> " + ex.getMessage());
             } catch (InterruptedException ex) {
@@ -61,7 +82,65 @@ public class SemgrepService {
                 throw new IllegalStateException("Semgrep scan was interrupted", ex);
             }
         }
-        throw new IllegalStateException("Failed to execute Semgrep. Tried multiple launch commands: " + String.join(" | ", failures));
+        ScanAttemptResult failed = new ScanAttemptResult();
+        failed.combinedFailures = String.join(" | ", failures);
+        return failed;
+    }
+
+    private boolean isRemoteConfig(String config) {
+        if (config == null) {
+            return false;
+        }
+        String trimmed = config.trim();
+        return trimmed.equals("auto")
+            || trimmed.startsWith("p/")
+            || trimmed.startsWith("r/")
+            || trimmed.startsWith("http://")
+            || trimmed.startsWith("https://");
+    }
+
+    private boolean containsRemoteFailure(String failures) {
+        if (failures == null) {
+            return false;
+        }
+        String text = failures.toLowerCase(Locale.ROOT);
+        return text.contains("sslerror")
+            || text.contains("ssl certificate")
+            || text.contains("certificate_verify_failed")
+            || text.contains("certificate verify failed")
+            || text.contains("max retries exceeded")
+            || text.contains("semgrep.dev");
+    }
+
+    private static class ScanAttemptResult {
+        private List<SemgrepFinding> findings;
+        private String combinedFailures;
+    }
+
+    private List<String> buildSemgrepArgs(Path targetPath, String configToUse, boolean fastScan) {
+        List<String> args = new ArrayList<String>();
+        args.add("scan");
+        args.add("--config");
+        args.add(configToUse);
+        args.add("--json");
+        if (properties.getSemgrep().getJobs() > 0) {
+            args.add("--jobs");
+            args.add(String.valueOf(properties.getSemgrep().getJobs()));
+        }
+        if (fastScan) {
+            args.add("--optimizations");
+            args.add("all");
+            if (properties.getSemgrep().getFastRuleTimeoutSeconds() > 0) {
+                args.add("--timeout");
+                args.add(String.valueOf(properties.getSemgrep().getFastRuleTimeoutSeconds()));
+            }
+            for (String exclude : properties.getSemgrep().getFastExcludes()) {
+                args.add("--exclude");
+                args.add(exclude);
+            }
+        }
+        args.add(targetPath.toAbsolutePath().toString());
+        return args;
     }
 
     private List<List<String>> buildCommandCandidates() {
@@ -82,16 +161,33 @@ public class SemgrepService {
         ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.redirectErrorStream(false);
         Process process = processBuilder.start();
-        boolean finished = process.waitFor(properties.getSemgrep().getTimeoutSeconds(), TimeUnit.SECONDS);
-        if (!finished) {
-            process.destroyForcibly();
-            throw new IllegalStateException("Semgrep scan timed out after " + properties.getSemgrep().getTimeoutSeconds() + " seconds");
+
+        // Drain stdout/stderr concurrently so the child process never blocks on a full pipe buffer.
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<String> stdoutFuture = executor.submit(() -> read(process.getInputStream()));
+        Future<String> stderrFuture = executor.submit(() -> read(process.getErrorStream()));
+        try {
+            boolean finished = process.waitFor(properties.getSemgrep().getTimeoutSeconds(), TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new IllegalStateException(
+                    "Semgrep scan timed out after " + properties.getSemgrep().getTimeoutSeconds()
+                        + " seconds. Try fastScan=true, narrower semgrepConfig (e.g. local rules file),"
+                        + " or increase scanner.semgrep.timeout-seconds."
+                );
+            }
+            CommandExecutionResult result = new CommandExecutionResult();
+            try {
+                result.stdout = stdoutFuture.get(30, TimeUnit.SECONDS);
+                result.stderr = stderrFuture.get(30, TimeUnit.SECONDS);
+            } catch (Exception ex) {
+                throw new IOException("Failed to read Semgrep process output", ex);
+            }
+            result.exitCode = process.exitValue();
+            return result;
+        } finally {
+            executor.shutdownNow();
         }
-        CommandExecutionResult result = new CommandExecutionResult();
-        result.stdout = read(process.getInputStream());
-        result.stderr = read(process.getErrorStream());
-        result.exitCode = process.exitValue();
-        return result;
     }
 
     private static class CommandExecutionResult {
