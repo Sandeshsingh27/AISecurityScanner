@@ -1,0 +1,236 @@
+# AI Security Scanner 🔐
+
+A Spring Boot application that combines **Semgrep** static analysis with **LLM-based triage** to produce a **SonarQube-style security report** with contextual explanations and remediation guidance.
+
+## What this project does
+
+- Runs `semgrep scan` against a target repository
+- Extracts file, line, rule, severity, and evidence from findings
+- Enriches findings with **10 lines of surrounding code context**
+- Optionally sends findings to an **OpenAI-compatible LLM** (OpenAI, GitHub Models, Copilot-compatible proxy) for:
+  - false-positive reduction
+  - exploitability analysis
+  - logic-aware explanations
+  - remediation suggestions
+- Audits dependencies in `pom.xml`, `package.json`, and `requirements.txt`
+- Calculates heuristic complexity hotspots
+- Produces:
+  - structured JSON report
+  - Markdown report in a **SonarQube-like format**
+- Supports **REST API** and **CLI mode** for CI/CD pipelines
+- Allows importing findings from an **external security agent** and merges them into the final report
+
+## Architecture
+
+- `SemgrepService` — executes Semgrep and parses JSON
+- `ContextSnippetService` — captures surrounding code lines for each finding
+- `LlmTriageService` — verifies exploitability and generates tailored remediation guidance
+- `DependencyAuditService` — checks known vulnerable dependency versions
+- `ComplexityAnalyzerService` — finds risky high-complexity methods/functions
+- `ReportAssemblerService` — creates a quality gate and normalized report
+- `MarkdownReportRenderer` — renders the exact report structure requested
+- `ScanCliRunner` — optional CLI mode for CI usage
+
+## Requirements
+
+- Java 21
+- Maven 3.8+
+- Python + Semgrep installed and available in `PATH`
+- Optional: a GitHub Models (or compatible) API key for LLM triage
+
+## Configuration
+
+Default settings live in `src/main/resources/application.properties`.
+
+Key properties:
+
+- `scanner.semgrep.command`: Semgrep executable, default `semgrep`
+- `scanner.semgrep.default-config`: default rule config, default `auto`
+- `scanner.llm.enabled`: enables/disables LLM enrichment
+- `scanner.llm.base-url`: GitHub Models chat completions endpoint (or compatible)
+- `scanner.llm.api-key`: API key
+- `scanner.llm.model`: model name such as `gpt-4o-mini`
+- `scanner.llm.provider-label`: label shown in reports/logs
+- `scanner.cli.enabled`: enable CLI mode at startup
+- `scanner.cli.target-path`: repository path to scan in CLI mode
+- `scanner.cli.fail-on-quality-gate`: fail process when gate fails
+
+## Run locally
+
+### 1) Build and test
+
+```powershell
+mvn clean test
+```
+
+### 2) Start the API
+
+```powershell
+mvn spring-boot:run
+```
+
+### 3) Generate a report via REST
+
+```powershell
+$body = @'
+{
+  "targetPath": "C:/Users/ssi51/Documents/Project/AISecurityScanner",
+  "semgrepConfig": "auto",
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": []
+}
+'@
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/scans/report" -ContentType "application/json" -Body $body
+```
+
+### 4) Generate the SonarQube-style Markdown report
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/scans/report/markdown" -ContentType "application/json" -Body $body
+```
+
+## Generate report for any GitHub repo locally
+
+Scan any GitHub repository (or local repo) and generate a security report:
+
+### 1) Clone or prepare the target repository
+
+```powershell
+git clone https://github.com/your-org/your-repo.git
+cd your-repo
+```
+
+### 2) Start the scanner API (in one terminal)
+
+```powershell
+cd C:\Users\ssi51\Documents\Project\AISecurityScanner
+.\.venv\Scripts\Activate.ps1
+mvn spring-boot:run
+```
+
+### 3) Generate the report (in another terminal)
+
+```powershell
+$repoPath = "C:\path\to\your-repo"
+$body = @{
+    targetPath = $repoPath
+    semgrepConfig = "auto"
+    llmEnabled = $false
+    includeDependencyAudit = $true
+    maxFindingsForLlm = 15
+    externalFindings = @()
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8080/api/scans/report/markdown" `
+  -ContentType "application/json" `
+  -Body $body | Out-File "security-report.md"
+
+# View the report
+notepad security-report.md
+```
+
+### 4) Optional: Enable LLM-powered analysis
+
+Set environment variables before starting the API:
+
+```powershell
+$env:SCANNER_LLM_ENABLED = "true"
+$env:SCANNER_LLM_API_KEY = "github_pat_xxx"
+$env:SCANNER_LLM_MODEL = "gpt-4o-mini"
+
+mvn spring-boot:run
+```
+
+Then re-run the report request with `llmEnabled: true` to get AI-powered explanations and remediation suggestions.
+
+## Run in CLI mode for CI
+
+```powershell
+mvn spring-boot:run "-Dspring-boot.run.arguments=--scanner.cli.enabled=true,--scanner.cli.target-path=C:/path/to/repo,--scanner.cli.fail-on-quality-gate=true"
+```
+
+If the quality gate fails and `scanner.cli.fail-on-quality-gate=true`, the process exits with a non-zero status.
+
+## Semgrep installation example
+
+```powershell
+python -m pip install semgrep
+semgrep --version
+```
+
+## LLM / GitHub Copilot style integration
+
+This project uses an **OpenAI-compatible chat-completions client**, defaulting to **GitHub Models**. You can point it to:
+
+- GitHub Models
+- an internal gateway
+- a Copilot-compatible proxy used in your environment
+
+Example environment variables:
+
+```powershell
+$env:SCANNER_LLM_ENABLED = "true"
+$env:SCANNER_LLM_API_KEY = "your-api-key"
+$env:SCANNER_LLM_MODEL = "gpt-4o-mini"
+$env:SCANNER_LLM_BASE_URL = "https://models.inference.ai.azure.com/chat/completions"
+```
+
+If you are not using a Copilot model endpoint, keep the default GitHub Models endpoint and set a supported model in `SCANNER_LLM_MODEL`.
+
+If you want to keep your existing **security agent**, send its confirmed findings in `externalFindings` during the scan request. The service merges them with Semgrep results so the final report behaves more like a centralized SonarQube dashboard.
+
+## REST API
+
+### `POST /api/scans/report`
+Returns the structured JSON report.
+
+### `POST /api/scans/report/markdown`
+Returns the exact Markdown report format for dashboards, PR comments, or Copilot Chat context.
+
+### Request body example
+
+```json
+{
+  "targetPath": "C:/repos/sample-service",
+  "semgrepConfig": "auto",
+  "llmEnabled": true,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 15,
+  "externalFindings": [
+    {
+      "id": "EXT-001",
+      "title": "Admin endpoint lacks role check",
+      "severity": "CRITICAL",
+      "filePath": "src/main/java/com/example/AdminController.java",
+      "line": 42,
+      "rule": "OWASP A01 / CWE-862",
+      "stack": "JAVA_SPRING_BOOT",
+      "evidence": "@DeleteMapping(\"/admin/users/{id}\")",
+      "taintChain": "HTTP @PathVariable id -> service.deleteUser(id)",
+      "fix": "Add @PreAuthorize('hasRole(''ADMIN'')') and validate ownership where applicable."
+    }
+  ]
+}
+```
+
+## GitHub Actions example
+
+A workflow is included in `.github/workflows/security-scan.yml`.
+
+It:
+- builds the Spring Boot application
+- runs tests
+- optionally runs the scanner in CLI mode
+- can fail the build based on the quality gate
+
+## Notes
+
+- Semgrep must be installed separately.
+- If no LLM is configured, the app still works using deterministic fallback remediation guidance.
+- Complexity scoring is heuristic, intended as a fast SonarQube-style hotspot indicator.
+
