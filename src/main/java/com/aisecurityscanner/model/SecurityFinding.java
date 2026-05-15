@@ -16,6 +16,7 @@ public class SecurityFinding {
     private boolean verifiedByLlm;
     private String suggestedCode;
     private String vulnerabilityType;
+    private String category; // SonarQube-style: Bug, Vulnerability, Code Smell, Security Hotspot, Hardcoded Secret
 
     public String getId() {
         return id;
@@ -128,5 +129,12 @@ public class SecurityFinding {
     public void setVulnerabilityType(String vulnerabilityType) {
         this.vulnerabilityType = vulnerabilityType;
     }
-}
 
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+}

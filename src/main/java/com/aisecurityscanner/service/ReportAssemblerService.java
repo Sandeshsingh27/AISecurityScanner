@@ -29,7 +29,8 @@ public class ReportAssemblerService {
                                        List<TriageResult> triageResults,
                                        List<ExternalFindingRequest> externalFindings,
                                        List<DependencyFinding> dependencyAudit,
-                                       List<ComplexityHotspot> complexityHotspots) {
+                                       List<ComplexityHotspot> complexityHotspots,
+                                       List<SecurityFinding> codeQualityFindings) {
         SecurityScanReport report = new SecurityScanReport();
         report.setProjectPath(projectPath);
         report.setDate(LocalDate.now());
@@ -38,7 +39,7 @@ public class ReportAssemblerService {
         report.setAttackSurface(attackSurface);
         report.setDependencyAudit(dependencyAudit);
         report.setComplexityHotspots(complexityHotspots);
-        report.setFindings(buildFindings(semgrepFindings, triageResults, externalFindings));
+        report.setFindings(buildFindings(semgrepFindings, triageResults, externalFindings, codeQualityFindings));
         report.setQualityGateMetrics(buildMetrics(report));
         report.setQualityGateStatus(report.getQualityGateMetrics().stream().allMatch(QualityGateMetric::isPassed)
             ? QualityGateStatus.PASSED : QualityGateStatus.FAILED);
@@ -47,7 +48,8 @@ public class ReportAssemblerService {
 
     private List<SecurityFinding> buildFindings(List<SemgrepFinding> semgrepFindings,
                                                 List<TriageResult> triageResults,
-                                                List<ExternalFindingRequest> externalFindings) {
+                                                List<ExternalFindingRequest> externalFindings,
+                                                List<SecurityFinding> codeQualityFindings) {
         List<SecurityFinding> findings = new ArrayList<SecurityFinding>();
         AtomicInteger critical = new AtomicInteger(1);
         AtomicInteger high = new AtomicInteger(1);
@@ -73,6 +75,7 @@ public class ReportAssemblerService {
             finding.setVerifiedByLlm(triageResult.isLlmVerified());
             finding.setSuggestedCode(triageResult.getSuggestedCode());
             finding.setVulnerabilityType(semgrepFinding.getVulnerabilityType());
+            finding.setCategory(inferCategory(semgrepFinding.getVulnerabilityType(), semgrepFinding.getTitle(), semgrepFinding.getRule()));
             findings.add(finding);
         }
 
@@ -93,9 +96,50 @@ public class ReportAssemblerService {
             finding.setVerifiedByLlm(false);
             finding.setSuggestedCode("");
             finding.setVulnerabilityType(external.getRule());
+            finding.setCategory(inferCategory(null, external.getTitle(), external.getRule()));
             findings.add(finding);
         }
+
+        if (codeQualityFindings != null) {
+            for (SecurityFinding cqf : codeQualityFindings) {
+                if (cqf.getSeverity() == null) {
+                    cqf.setSeverity(Severity.LOW);
+                }
+                cqf.setId(nextId(cqf.getSeverity(), critical, high, medium, low, info));
+                if (cqf.getCategory() == null || cqf.getCategory().isEmpty()) {
+                    cqf.setCategory(inferCategory(cqf.getVulnerabilityType(), cqf.getTitle(), cqf.getRule()));
+                }
+                findings.add(cqf);
+            }
+        }
         return findings;
+    }
+
+    private String inferCategory(String vulnerabilityType, String title, String rule) {
+        String text = ((vulnerabilityType == null ? "" : vulnerabilityType) + " "
+            + (title == null ? "" : title) + " "
+            + (rule == null ? "" : rule)).toLowerCase(Locale.ROOT);
+        if (text.contains("secret") || text.contains("password") || text.contains("api key") || text.contains("apikey") || text.contains("token") || text.contains("private key")) {
+            return "Hardcoded Secret";
+        }
+        if (text.contains("sql injection") || text.contains("xss") || text.contains("cross-site")
+            || text.contains("command injection") || text.contains("path traversal") || text.contains("deserialization")
+            || text.contains("ssrf") || text.contains("csrf") || text.contains("permitall") || text.contains("trustmanager")
+            || text.contains("weak hash") || text.contains("weak crypto") || text.contains("ecb") || text.contains("cwe-")) {
+            return "Vulnerability";
+        }
+        if (text.contains("hotspot") || text.contains("random") || text.contains("http://") || text.contains("debug")) {
+            return "Security Hotspot";
+        }
+        if (text.contains("todo") || text.contains("system.out") || text.contains("console.log")
+            || text.contains("wildcard") || text.contains("show-sql") || text.contains("smell")) {
+            return "Code Smell";
+        }
+        if (text.contains("printstacktrace") || text.contains("broad catch") || text.contains("empty catch")
+            || text.contains("== ") || text.contains("bug")) {
+            return "Bug";
+        }
+        return "Vulnerability";
     }
 
     private List<QualityGateMetric> buildMetrics(SecurityScanReport report) {
@@ -112,6 +156,12 @@ public class ReportAssemblerService {
         metrics.add(new QualityGateMetric("High Issues", String.valueOf(highCount), "≤ 2", highCount <= 2));
         metrics.add(new QualityGateMetric("Hardcoded Secrets", String.valueOf(hardcodedSecrets), "0", hardcodedSecrets == 0));
         metrics.add(new QualityGateMetric("Unauthenticated Endpoints", String.valueOf(unauthenticatedEndpoints), "0", unauthenticatedEndpoints == 0));
+        long bugs = report.getFindings().stream().filter(f -> "Bug".equals(f.getCategory())).count();
+        long codeSmells = report.getFindings().stream().filter(f -> "Code Smell".equals(f.getCategory())).count();
+        long hotspots = report.getFindings().stream().filter(f -> "Security Hotspot".equals(f.getCategory())).count();
+        metrics.add(new QualityGateMetric("Bugs", String.valueOf(bugs), "≤ 20", bugs <= 20));
+        metrics.add(new QualityGateMetric("Code Smells", String.valueOf(codeSmells), "≤ 100", codeSmells <= 100));
+        metrics.add(new QualityGateMetric("Security Hotspots (review)", String.valueOf(hotspots), "≤ 10", hotspots <= 10));
         metrics.add(new QualityGateMetric("Avg Complexity (hot paths)", String.format(Locale.US, "%.1f", averageComplexity), "≤ 15", averageComplexity <= 15.0));
         return metrics;
     }

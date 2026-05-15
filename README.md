@@ -1,8 +1,29 @@
 # AI Security Scanner 🔐
 
-A Spring Boot application that combines **Semgrep** static analysis with **LLM-based triage** to produce a **SonarQube-style security report** with contextual explanations and remediation guidance.
+A Spring Boot security analysis platform that combines **Semgrep** static analysis, optional **LLM-based triage**, dependency checks, and complexity heuristics to generate **SonarQube-style reports** for local repos, CI pipelines, and API workflows.
 
-The bundled offline Semgrep rule pack includes checks for command injection, XSS, and hardcoded secrets in source/config files.
+It is designed for teams that want practical, offline-first security scanning with deterministic output by default, plus deeper exploitability reasoning when an LLM endpoint is enabled.
+
+## Project description
+
+AI Security Scanner analyzes source code and project metadata, normalizes findings across multiple inputs, and publishes a single report that can be used in dashboards, pull-request discussions, or release gates.
+
+The scanner supports both API and CLI usage, can ingest external agent findings, and works with a local Semgrep ruleset when hosted rule sources are restricted.
+
+## Feature highlights
+
+- **Offline Semgrep rule pack** aligned to SonarQube + Trivy-style signal categories
+  - injection and code execution risks (command injection, unsafe eval/exec, insecure deserialization)
+  - exposed secrets and security misconfiguration smells in source and config files
+  - weak crypto and entropy issues (MD5/SHA-1 usage, non-crypto random sources)
+  - insecure HTTP/TLS usage patterns and trust-validation bypass hotspots
+  - framework hotspots (for example Spring Security `permitAll()` and CSRF disable patterns)
+  - code hygiene findings that often correlate with risk (debugger/console logging, stack trace exposure)
+- **Optional LLM triage** for false-positive reduction, exploitability context, and tailored fixes
+- **Dependency audit** support for common manifests (`pom.xml`, `package.json`, `requirements.txt`)
+- **Complexity hotspot detection** for risky high-complexity methods/functions
+- **Quality gate scoring** with JSON and Markdown outputs for CI/CD enforcement
+- **Extensible ingestion** that merges findings from external security agents
 
 ## What this project does
 

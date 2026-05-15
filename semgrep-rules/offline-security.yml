@@ -124,3 +124,141 @@ rules:
       owasp: OWASP A02:2021 - Cryptographic Failures
       cwe: CWE-798
 
+  - id: java-weak-hash-md5
+    message: MD5 is cryptographically broken; use SHA-256 or stronger.
+    severity: WARNING
+    languages: [java]
+    pattern: MessageDigest.getInstance("MD5")
+    metadata:
+      owasp: OWASP A02:2021 - Cryptographic Failures
+      cwe: CWE-327
+
+  - id: java-weak-hash-sha1
+    message: SHA-1 is collision-vulnerable; use SHA-256 or stronger.
+    severity: WARNING
+    languages: [java]
+    pattern: MessageDigest.getInstance("SHA-1")
+    metadata:
+      owasp: OWASP A02:2021 - Cryptographic Failures
+      cwe: CWE-327
+
+  - id: java-printstacktrace
+    message: printStackTrace() leaks stack traces and is improper logging.
+    severity: INFO
+    languages: [java]
+    pattern: $E.printStackTrace()
+    metadata:
+      cwe: CWE-209
+
+  - id: java-system-out-println
+    message: System.out/err used for logging — use SLF4J/Logger instead.
+    severity: INFO
+    languages: [java]
+    pattern-either:
+      - pattern: System.out.println(...)
+      - pattern: System.err.println(...)
+    metadata:
+      smell: code-smell
+
+  - id: java-spring-permitall
+    message: Spring Security permitAll() exposes endpoints without authentication.
+    severity: WARNING
+    languages: [java]
+    pattern-regex: \.permitAll\(\)
+    metadata:
+      owasp: OWASP A01:2021 - Broken Access Control
+      cwe: CWE-284
+
+  - id: java-spring-csrf-disable
+    message: CSRF protection disabled for Spring Security configuration.
+    severity: WARNING
+    languages: [java]
+    pattern-regex: csrf\(\)\s*\.\s*disable\(\)
+    metadata:
+      owasp: OWASP A01:2021 - Broken Access Control
+      cwe: CWE-352
+
+  - id: java-trustall
+    message: TrustManager that accepts all certificates disables TLS validation.
+    severity: ERROR
+    languages: [java]
+    pattern-regex: checkServerTrusted\([^)]*\)\s*\{\s*\}
+    metadata:
+      owasp: OWASP A02:2021 - Cryptographic Failures
+      cwe: CWE-295
+
+  - id: js-console-log
+    message: console.log left in source code.
+    severity: INFO
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: console.log(...)
+      - pattern: console.debug(...)
+    metadata:
+      smell: code-smell
+
+  - id: js-debugger
+    message: debugger statement left in source.
+    severity: WARNING
+    languages: [javascript, typescript]
+    pattern: debugger
+    metadata:
+      smell: code-smell
+
+  - id: js-math-random
+    message: Math.random() is not cryptographically secure.
+    severity: WARNING
+    languages: [javascript, typescript]
+    pattern: Math.random()
+    metadata:
+      cwe: CWE-330
+
+  - id: python-yaml-load
+    message: yaml.load without SafeLoader allows arbitrary object construction.
+    severity: ERROR
+    languages: [python]
+    pattern: yaml.load($X)
+    metadata:
+      cwe: CWE-20
+
+  - id: python-pickle-load
+    message: pickle.load on untrusted data leads to arbitrary code execution.
+    severity: ERROR
+    languages: [python]
+    pattern-either:
+      - pattern: pickle.load($X)
+      - pattern: pickle.loads($X)
+    metadata:
+      cwe: CWE-502
+
+  - id: python-assert-in-prod
+    message: assert is stripped under python -O; use explicit if/raise.
+    severity: WARNING
+    languages: [python]
+    pattern: assert $X
+    metadata:
+      smell: bug
+
+  - id: dockerfile-latest-tag
+    message: Avoid :latest image tag for reproducibility.
+    severity: INFO
+    languages: [generic]
+    paths:
+      include:
+        - "**/Dockerfile*"
+    pattern-regex: ^FROM\s+\S+:latest
+    metadata:
+      smell: code-smell
+
+  - id: dockerfile-add-http
+    message: ADD with remote URL bypasses checksum verification — prefer COPY.
+    severity: WARNING
+    languages: [generic]
+    paths:
+      include:
+        - "**/Dockerfile*"
+    pattern-regex: ^ADD\s+https?://
+    metadata:
+      cwe: CWE-494
+
+

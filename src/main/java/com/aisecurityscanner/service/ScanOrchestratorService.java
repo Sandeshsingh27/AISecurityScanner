@@ -30,6 +30,7 @@ public class ScanOrchestratorService {
     private final ComplexityAnalyzerService complexityAnalyzerService;
     private final AgentFindingService agentFindingService;
     private final ReportAssemblerService reportAssemblerService;
+    private final CodeQualityAnalyzerService codeQualityAnalyzerService;
 
     public ScanOrchestratorService(ScannerProperties properties,
                                    ProjectDiscoveryService projectDiscoveryService,
@@ -39,7 +40,8 @@ public class ScanOrchestratorService {
                                    DependencyAuditService dependencyAuditService,
                                    ComplexityAnalyzerService complexityAnalyzerService,
                                    AgentFindingService agentFindingService,
-                                   ReportAssemblerService reportAssemblerService) {
+                                   ReportAssemblerService reportAssemblerService,
+                                   CodeQualityAnalyzerService codeQualityAnalyzerService) {
         this.properties = properties;
         this.projectDiscoveryService = projectDiscoveryService;
         this.semgrepService = semgrepService;
@@ -49,6 +51,7 @@ public class ScanOrchestratorService {
         this.complexityAnalyzerService = complexityAnalyzerService;
         this.agentFindingService = agentFindingService;
         this.reportAssemblerService = reportAssemblerService;
+        this.codeQualityAnalyzerService = codeQualityAnalyzerService;
     }
 
     public SecurityScanReport scan(ScanRequest request) {
@@ -98,7 +101,8 @@ public class ScanOrchestratorService {
             triageResults,
             mergedExternalFindings,
             dependencyFindings,
-            complexityHotspots
+            complexityHotspots,
+            codeQualityAnalyzerService.analyze(targetPath)
         );
     }
 }

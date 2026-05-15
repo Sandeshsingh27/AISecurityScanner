@@ -35,9 +35,13 @@ public class MarkdownReportRenderer {
         }
         builder.append("\n---\n\n");
         builder.append("## Findings\n\n");
+        appendQualityProfile(builder, report.getFindings());
         appendDetailedFindings(builder, report.getFindings(), Severity.CRITICAL);
         appendDetailedFindings(builder, report.getFindings(), Severity.HIGH);
-        appendDetailedFindings(builder, report.getFindings(), Severity.MEDIUM);
+        appendMediumFindings(builder, report.getFindings());
+        appendCategoryTable(builder, "🐞 Bugs", report.getFindings(), "Bug");
+        appendCategoryTable(builder, "🔥 Security Hotspots (manual review)", report.getFindings(), "Security Hotspot");
+        appendCategoryTable(builder, "💨 Code Smells", report.getFindings(), "Code Smell");
         appendCompactLowAndInfo(builder, report.getFindings());
         builder.append("\n---\n\n");
         builder.append("## Dependency Audit\n\n");
@@ -100,22 +104,126 @@ public class MarkdownReportRenderer {
         }
     }
 
+    private void appendQualityProfile(StringBuilder builder, List<SecurityFinding> findings) {
+        String[] categories = {"Vulnerability", "Bug", "Security Hotspot", "Code Smell", "Hardcoded Secret"};
+        String[] icons = {"🛡️ Vulnerabilities", "🐞 Bugs", "🔥 Security Hotspots", "💨 Code Smells", "🔑 Hardcoded Secrets"};
+        Severity[] severities = {Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO};
+        builder.append("### 📊 Quality Profile (SonarQube-style)\n\n");
+        builder.append("| Category | 🔴 Critical | 🟠 High | 🟡 Medium | 🔵 Low | ⚪ Info | Total |\n");
+        builder.append("|---|---|---|---|---|---|---|\n");
+        long grandTotal = 0;
+        for (int i = 0; i < categories.length; i++) {
+            String category = categories[i];
+            long total = 0;
+            builder.append("| ").append(icons[i]);
+            for (Severity severity : severities) {
+                final String cat = category;
+                final Severity sev = severity;
+                long count = findings.stream()
+                    .filter(f -> cat.equals(f.getCategory()) && f.getSeverity() == sev)
+                    .count();
+                total += count;
+                builder.append(" | ").append(count);
+            }
+            builder.append(" | **").append(total).append("** |\n");
+            grandTotal += total;
+        }
+        builder.append("| **Total** | | | | | | **").append(grandTotal).append("** |\n\n");
+    }
+
+    private void appendMediumFindings(StringBuilder builder, List<SecurityFinding> findings) {
+        List<SecurityFinding> medium = findings.stream()
+            .filter(f -> f.getSeverity() == Severity.MEDIUM)
+            .collect(Collectors.toList());
+        builder.append("### 🟡 MEDIUM\n\n");
+        if (medium.isEmpty()) {
+            builder.append("None.\n\n");
+            return;
+        }
+        // If many, render as compact table to keep the report readable.
+        if (medium.size() > 10) {
+            builder.append("_Showing ").append(medium.size()).append(" medium findings (compact view)._\n\n");
+            builder.append("| ID | Category | File | Line | Rule | Finding |\n");
+            builder.append("|---|---|---|---|---|---|\n");
+            for (SecurityFinding finding : medium) {
+                builder.append("| ").append(finding.getId())
+                    .append(" | ").append(nullSafe(finding.getCategory()))
+                    .append(" | `").append(finding.getFilePath()).append("` | ").append(finding.getLine())
+                    .append(" | ").append(nullSafe(finding.getRule()))
+                    .append(" | ").append(escapeCell(finding.getTitle()))
+                    .append(" |\n");
+            }
+            builder.append("\n");
+            return;
+        }
+        appendDetailedFindings(builder, findings, Severity.MEDIUM);
+    }
+
+    private void appendCategoryTable(StringBuilder builder, String header, List<SecurityFinding> findings, String category) {
+        List<SecurityFinding> scoped = findings.stream()
+            .filter(f -> category.equals(f.getCategory()))
+            .filter(f -> f.getSeverity() != Severity.CRITICAL && f.getSeverity() != Severity.HIGH) // already shown above
+            .collect(Collectors.toList());
+        builder.append("### ").append(header).append("\n\n");
+        if (scoped.isEmpty()) {
+            builder.append("None.\n\n");
+            return;
+        }
+        builder.append("| ID | Severity | File | Line | Rule | Finding |\n");
+        builder.append("|---|---|---|---|---|---|\n");
+        int maxRows = 80;
+        int shown = 0;
+        for (SecurityFinding finding : scoped) {
+            if (shown >= maxRows) {
+                builder.append("| … | … | … | … | … | _").append(scoped.size() - shown).append(" more truncated_ |\n");
+                break;
+            }
+            builder.append("| ").append(finding.getId())
+                .append(" | ").append(toSeverityBadge(finding.getSeverity()))
+                .append(" | `").append(finding.getFilePath()).append("` | ").append(finding.getLine())
+                .append(" | ").append(nullSafe(finding.getRule()))
+                .append(" | ").append(escapeCell(finding.getTitle()))
+                .append(" |\n");
+            shown++;
+        }
+        builder.append("\n");
+    }
+
+    private String escapeCell(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("|", "\\|").replace("\n", " ").replace("\r", " ");
+    }
+
     private void appendCompactLowAndInfo(StringBuilder builder, List<SecurityFinding> findings) {
         builder.append("### 🔵 LOW / ⚪ INFO\n\n");
-        builder.append("| ID | File | Line | Rule | Finding |\n");
-        builder.append("|---|---|---|---|---|\n");
         List<SecurityFinding> scoped = findings.stream()
             .filter(finding -> finding.getSeverity() == Severity.LOW || finding.getSeverity() == Severity.INFO)
+            // Skip ones already listed under a category table to avoid duplication.
+            .filter(finding -> finding.getCategory() == null
+                || (!"Bug".equals(finding.getCategory())
+                    && !"Code Smell".equals(finding.getCategory())
+                    && !"Security Hotspot".equals(finding.getCategory())))
             .collect(Collectors.toList());
+        builder.append("| ID | File | Line | Rule | Finding |\n");
+        builder.append("|---|---|---|---|---|\n");
+        int maxRows = 100;
+        int shown = 0;
         for (SecurityFinding finding : scoped) {
+            if (shown >= maxRows) {
+                builder.append("| … | … | … | … | _").append(scoped.size() - shown).append(" more truncated_ |\n");
+                break;
+            }
             builder.append("| ").append(finding.getId())
                 .append(" | `").append(finding.getFilePath()).append("` | ").append(finding.getLine())
-                .append(" | ").append(finding.getRule())
-                .append(" | ").append(finding.getTitle())
+                .append(" | ").append(nullSafe(finding.getRule()))
+                .append(" | ").append(escapeCell(finding.getTitle()))
                 .append(" |\n");
+            shown++;
         }
         if (scoped.isEmpty()) {
-            builder.append("| - | - | - | - | No low/info findings |\n");
+            builder.append("| - | - | - | - | No additional low/info findings |\n");
         }
         builder.append("\n");
     }
