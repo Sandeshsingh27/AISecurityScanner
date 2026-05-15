@@ -5,10 +5,12 @@ import com.aisecurityscanner.model.SemgrepFinding;
 import com.aisecurityscanner.model.TriageResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +23,8 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class LlmTriageService {
 
+    private static final Logger log = LoggerFactory.getLogger(LlmTriageService.class);
+
     private final ScannerProperties properties;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -31,15 +35,42 @@ public class LlmTriageService {
         this.restTemplate = restTemplateBuilder.build();
     }
 
-    public TriageResult triage(SemgrepFinding finding, String context, boolean requestLlm) {
-        if (requestLlm && properties.getLlm().isEnabled() && StringUtils.hasText(properties.getLlm().getApiKey())) {
-            try {
-                return callLlm(finding, context);
-            } catch (Exception ex) {
-                return fallback(finding, context, false);
-            }
+    @PostConstruct
+    void logLlmState() {
+        ScannerProperties.Llm llm = properties.getLlm();
+        log.info("LLM triage configuration -> enabled={}, provider={}, model={}, baseUrl={}, apiKeyConfigured={}",
+            llm.isEnabled(),
+            llm.getProviderLabel(),
+            llm.getModel(),
+            llm.getBaseUrl(),
+            StringUtils.hasText(llm.getApiKey()));
+        if (!StringUtils.hasText(llm.getApiKey())) {
+            log.warn("scanner.llm.api-key is empty. Requests with llmEnabled=true will fall back to deterministic explanations until SCANNER_LLM_API_KEY is set.");
+        } else if (!llm.isEnabled()) {
+            log.info("scanner.llm.enabled=false (server default). Per-request llmEnabled=true will still trigger live LLM calls because an API key is configured.");
         }
-        return fallback(finding, context, false);
+    }
+
+    public TriageResult triage(SemgrepFinding finding, String context, boolean requestLlm) {
+        ScannerProperties.Llm llm = properties.getLlm();
+        // Request-level flag takes precedence: if the caller asks for LLM, honor it
+        // as long as we have credentials. The server-side scanner.llm.enabled is only
+        // a default for callers that don't specify llmEnabled in the request.
+        boolean useLlm = requestLlm || llm.isEnabled();
+        if (!useLlm) {
+            return fallback(finding, context, false);
+        }
+        if (!StringUtils.hasText(llm.getApiKey())) {
+            log.debug("LLM call skipped for {}:{} because scanner.llm.api-key is not configured", finding.getFilePath(), finding.getLine());
+            return fallback(finding, context, false);
+        }
+        try {
+            return callLlm(finding, context);
+        } catch (Exception ex) {
+            log.warn("LLM triage call failed for {}:{} ({}): {}. Falling back to deterministic explanation.",
+                finding.getFilePath(), finding.getLine(), ex.getClass().getSimpleName(), ex.getMessage());
+            return fallback(finding, context, false);
+        }
     }
 
     private TriageResult callLlm(SemgrepFinding finding, String context) throws Exception {
@@ -65,7 +96,7 @@ public class LlmTriageService {
         ResponseEntity<String> response = restTemplate.postForEntity(properties.getLlm().getBaseUrl(), new HttpEntity<Map<String, Object>>(payload, headers), String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
         String content = root.path("choices").get(0).path("message").path("content").asText();
-        JsonNode triageJson = objectMapper.readTree(content);
+        JsonNode triageJson = parseModelJson(content, finding);
 
         TriageResult result = new TriageResult();
         result.setExploitable(triageJson.path("exploitable").asBoolean(true));
@@ -79,13 +110,104 @@ public class LlmTriageService {
     private String buildPrompt(SemgrepFinding finding, String context) {
         return "Analyze this security finding like a penetration tester and secure code reviewer. "
             + "Decide if it is actually exploitable in this context. If yes, explain exactly how and provide the best remediation. "
-            + "Return ONLY valid JSON with keys exploitable, explanation, fix, suggestedCode.\n\n"
+            + "Return ONLY a single raw JSON object (no markdown, no code fences, no prose) with exactly these keys: "
+            + "exploitable (boolean), explanation (string), fix (string), suggestedCode (string).\n\n"
             + "Rule: " + finding.getRule() + "\n"
             + "Severity: " + finding.getSeverity() + "\n"
             + "File: " + finding.getFilePath() + ":" + finding.getLine() + "\n"
             + "Vulnerability Type: " + finding.getVulnerabilityType() + "\n"
             + "Semgrep Message: " + finding.getMessage() + "\n"
             + "Code Context:\n" + context;
+    }
+
+    /**
+     * Some models wrap JSON output in markdown fences (```json ... ```), prepend prose,
+     * or append commentary. Strip those wrappers and parse the first balanced JSON object
+     * we can find. Falls back to a synthetic JSON node carrying the raw text as the
+     * explanation when no parseable JSON is present.
+     */
+    private JsonNode parseModelJson(String content, SemgrepFinding finding) {
+        String cleaned = stripCodeFences(content == null ? "" : content.trim());
+        try {
+            return objectMapper.readTree(cleaned);
+        } catch (Exception ignored) {
+            // try to extract the first {...} block
+        }
+        String candidate = extractFirstJsonObject(cleaned);
+        if (candidate != null) {
+            try {
+                return objectMapper.readTree(candidate);
+            } catch (Exception ignored) {
+                // fall through to synthetic node
+            }
+        }
+        log.warn("LLM returned non-JSON content for {}:{}; using raw text as explanation.",
+            finding.getFilePath(), finding.getLine());
+        com.fasterxml.jackson.databind.node.ObjectNode synthetic = objectMapper.createObjectNode();
+        synthetic.put("exploitable", true);
+        synthetic.put("explanation", cleaned.length() > 1500 ? cleaned.substring(0, 1500) + "..." : cleaned);
+        synthetic.put("fix", defaultFix(finding));
+        synthetic.put("suggestedCode", "");
+        return synthetic;
+    }
+
+    private String stripCodeFences(String text) {
+        if (text.isEmpty()) {
+            return text;
+        }
+        // Remove leading ```json / ```JSON / ``` fences
+        String t = text;
+        if (t.startsWith("```")) {
+            int firstNewline = t.indexOf('\n');
+            if (firstNewline >= 0) {
+                t = t.substring(firstNewline + 1);
+            } else {
+                t = t.substring(3);
+            }
+        }
+        // Remove trailing ``` fence
+        int lastFence = t.lastIndexOf("```");
+        if (lastFence >= 0) {
+            t = t.substring(0, lastFence);
+        }
+        return t.trim();
+    }
+
+    private String extractFirstJsonObject(String text) {
+        int start = text.indexOf('{');
+        if (start < 0) {
+            return null;
+        }
+        int depth = 0;
+        boolean inString = false;
+        boolean escape = false;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (c == '\\') {
+                escape = true;
+                continue;
+            }
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) {
+                continue;
+            }
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return text.substring(start, i + 1);
+                }
+            }
+        }
+        return null;
     }
 
     private TriageResult fallback(SemgrepFinding finding, String context, boolean verified) {

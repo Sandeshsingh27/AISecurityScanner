@@ -43,6 +43,9 @@ The scanner supports both API and CLI usage, can ingest external agent findings,
 - Supports **REST API** and **CLI mode** for CI/CD pipelines
 - Allows importing findings from an **external security agent** and merges them into the final report
 
+![img.png](img.png)
+![img_1.png](img_1.png)
+
 ## Architecture
 
 - `SemgrepService` — executes Semgrep and parses JSON
@@ -185,15 +188,28 @@ notepad security-report.md
 
 ### 4) Optional: Enable LLM-powered analysis
 
+> The request body flag `llmEnabled: true` is enough to trigger live LLM triage **as long as `scanner.llm.api-key` is configured on the server**. The server-side `scanner.llm.enabled` is only the default for callers that don't set the flag. If no API key is present, the request automatically falls back to deterministic explanations (which is why the LLM and non-LLM outputs can look identical).
+
 Set environment variables before starting the API:
 
 ```powershell
-$env:SCANNER_LLM_ENABLED = "true"
 $env:SCANNER_LLM_API_KEY = "github_pat_xxx"
-$env:SCANNER_LLM_MODEL = "gpt-4o-mini"
+$env:SCANNER_LLM_MODEL   = "gpt-4o-mini"
+# Optional — make LLM the default for every request:
+$env:SCANNER_LLM_ENABLED = "true"
 
 mvn spring-boot:run
 ```
+
+On startup, the application logs the effective LLM configuration, for example:
+
+```
+LLM triage configuration -> enabled=false, provider=GitHub Models, model=gpt-4o-mini, baseUrl=..., apiKeyConfigured=true
+```
+
+- `apiKeyConfigured=true` + request `llmEnabled=true` → live LLM call.
+- `apiKeyConfigured=false` → every request falls back deterministically, regardless of `llmEnabled`.
+- If a live LLM call fails (network/SSL/auth/JSON), a `WARN` log is emitted with the reason and that finding falls back deterministically.
 
 Then re-run the report request with `llmEnabled: true` to get AI-powered explanations and remediation suggestions.
 
