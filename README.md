@@ -2,6 +2,8 @@
 
 A Spring Boot application that combines **Semgrep** static analysis with **LLM-based triage** to produce a **SonarQube-style security report** with contextual explanations and remediation guidance.
 
+The bundled offline Semgrep rule pack includes checks for command injection, XSS, and hardcoded secrets in source/config files.
+
 ## What this project does
 
 - Runs `semgrep scan` against a target repository
@@ -242,6 +244,8 @@ Use one of these options:
 semgrep scan --config semgrep-rules/offline-security.yml --json C:/path/to/repo
 ```
 
+Note: the scanner uses `--no-git-ignore` so newly added or untracked files are also scanned during local validation.
+
 2) If you must use hosted configs like `auto` or `p/java`, set CA bundle environment variables first:
 
 ```powershell
@@ -311,6 +315,131 @@ Returns the exact Markdown report format for dashboards, PR comments, or Copilot
     }
   ]
 }
+```
+
+## cURL examples for endpoints
+
+Use these directly in Postman (Import -> Raw text) or from terminal.
+
+### 1) JSON report
+
+```bash
+curl --location 'http://localhost:8080/api/scans/report' \
+--header 'Content-Type: application/json' \
+--data '{
+  "targetPath": "C:/Users/ssi51/Documents/Project/ChatAPIWithRAG",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": []
+}'
+```
+
+### 2) Markdown report
+
+```bash
+curl --location 'http://localhost:8080/api/scans/report/markdown' \
+--header 'Content-Type: application/json' \
+--data '{
+  "targetPath": "C:/Users/ssi51/Documents/Project/ChatAPIWithRAG",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": []
+}'
+```
+
+### 3) Markdown report to file
+
+```bash
+curl --location 'http://localhost:8080/api/scans/report/markdown' \
+--header 'Content-Type: application/json' \
+--data '{
+  "targetPath": "C:/Users/ssi51/Documents/Project/ChatAPIWithRAG",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": []
+}' \
+--output security-report.md
+```
+
+### 4) LLM-enabled report
+
+```bash
+curl --location 'http://localhost:8080/api/scans/report' \
+--header 'Content-Type: application/json' \
+--data '{
+  "targetPath": "C:/Users/ssi51/Documents/Project/ChatAPIWithRAG",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": true,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 15,
+  "externalFindings": []
+}'
+```
+
+### 5) Auto-import external security agent findings
+
+```bash
+curl --location 'http://localhost:8080/api/scans/report/markdown' \
+--header 'Content-Type: application/json' \
+--data '{
+  "targetPath": "C:/Users/ssi51/Documents/Project/ChatAPIWithRAG",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "autoImportAgentFindings": true,
+  "externalFindings": []
+}'
+```
+
+### 6) Manually pass external findings
+
+```bash
+curl --location 'http://localhost:8080/api/scans/report' \
+--header 'Content-Type: application/json' \
+--data '{
+  "targetPath": "C:/Users/ssi51/Documents/Project/ChatAPIWithRAG",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": true,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": [
+    {
+      "id": "EXT-001",
+      "title": "Admin endpoint lacks role check",
+      "severity": "CRITICAL",
+      "filePath": "src/main/java/com/example/AdminController.java",
+      "line": 42,
+      "rule": "OWASP A01 / CWE-862",
+      "stack": "JAVA_SPRING_BOOT",
+      "evidence": "@DeleteMapping(\"/admin/users/{id}\")",
+      "taintChain": "HTTP @PathVariable id -> service.deleteUser(id)",
+      "fix": "Add @PreAuthorize(\"hasRole('ADMIN')\") and validate ownership."
+    }
+  ]
+}'
+```
+
+### 7) Windows PowerShell note
+
+In PowerShell, if `curl` is aliased, use `curl.exe` explicitly.
+
+```bash
+curl.exe --location "http://localhost:8080/api/scans/report" ^
+--header "Content-Type: application/json" ^
+--data "{ \"targetPath\": \"C:/Users/ssi51/Documents/Project/ChatAPIWithRAG\", \"semgrepConfig\": \"semgrep-rules/offline-security.yml\", \"fastScan\": true, \"llmEnabled\": false, \"includeDependencyAudit\": true, \"maxFindingsForLlm\": 10, \"externalFindings\": [] }"
 ```
 
 ## GitHub Actions example

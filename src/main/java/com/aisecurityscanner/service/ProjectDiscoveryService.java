@@ -19,7 +19,7 @@ public class ProjectDiscoveryService {
     public Set<StackType> detectStacks(Path targetPath) {
         Set<StackType> stacks = new LinkedHashSet<StackType>();
         try (Stream<Path> stream = Files.walk(targetPath)) {
-            List<Path> files = stream.filter(Files::isRegularFile).collect(Collectors.toList());
+            List<Path> files = stream.filter(Files::isRegularFile).filter(this::isScannableSourceFile).toList();
             for (Path file : files) {
                 String name = file.getFileName().toString();
                 String normalized = file.toString().replace('\\', '/').toLowerCase();
@@ -72,7 +72,7 @@ public class ProjectDiscoveryService {
 
     public int countFiles(Path targetPath) {
         try (Stream<Path> stream = Files.walk(targetPath)) {
-            return (int) stream.filter(Files::isRegularFile).count();
+            return (int) stream.filter(Files::isRegularFile).filter(this::isScannableSourceFile).count();
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to count files in: " + targetPath, ex);
         }
@@ -81,7 +81,7 @@ public class ProjectDiscoveryService {
     public List<String> discoverAttackSurface(Path targetPath) {
         List<String> attackSurface = new ArrayList<String>();
         try (Stream<Path> stream = Files.walk(targetPath)) {
-            List<Path> files = stream.filter(Files::isRegularFile).collect(Collectors.toList());
+            List<Path> files = stream.filter(Files::isRegularFile).filter(this::isScannableSourceFile).collect(Collectors.toList());
             for (Path file : files) {
                 String content = safeRead(file);
                 String relative = targetPath.relativize(file).toString().replace('\\', '/');
@@ -133,6 +133,15 @@ public class ProjectDiscoveryService {
         } catch (IOException ex) {
             return "";
         }
+    }
+
+    private boolean isScannableSourceFile(Path file) {
+        String normalized = file.toString().replace('\\', '/').toLowerCase();
+        if (normalized.contains("/target/") || normalized.contains("/build/") || normalized.contains("/.git/")
+            || normalized.contains("/node_modules/") || normalized.contains("/.venv/") || normalized.contains("/venv/")) {
+            return false;
+        }
+        return !(normalized.endsWith(".jar") || normalized.endsWith(".class") || normalized.endsWith(".zip") || normalized.endsWith(".war"));
     }
 }
 

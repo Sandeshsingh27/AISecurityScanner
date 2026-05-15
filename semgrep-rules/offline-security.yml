@@ -55,3 +55,72 @@ rules:
       owasp: OWASP A03:2021 - Injection
       cwe: CWE-79
 
+  - id: java-hardcoded-secret
+    message: Potential hardcoded secret in Java source.
+    severity: ERROR
+    languages: [java]
+    patterns:
+      - pattern-either:
+          - pattern: String $KEY = "$VAL";
+          - pattern: private static final String $KEY = "$VAL";
+      - metavariable-regex:
+          metavariable: $KEY
+          regex: (?i).*(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key).*
+      - metavariable-regex:
+          metavariable: $VAL
+          regex: .{8,}
+    metadata:
+      owasp: OWASP A02:2021 - Cryptographic Failures
+      cwe: CWE-798
+
+  - id: python-hardcoded-secret
+    message: Potential hardcoded secret in Python source.
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern: $KEY = "$VAL"
+      - metavariable-regex:
+          metavariable: $KEY
+          regex: (?i).*(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key).*
+      - metavariable-regex:
+          metavariable: $VAL
+          regex: .{8,}
+    metadata:
+      owasp: OWASP A02:2021 - Cryptographic Failures
+      cwe: CWE-798
+
+  - id: js-hardcoded-secret
+    message: Potential hardcoded secret in JavaScript/TypeScript source.
+    severity: ERROR
+    languages: [javascript, typescript]
+    patterns:
+      - pattern-either:
+          - pattern: const $KEY = "$VAL"
+          - pattern: let $KEY = "$VAL"
+          - pattern: var $KEY = "$VAL"
+      - metavariable-regex:
+          metavariable: $KEY
+          regex: (?i).*(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key).*
+      - metavariable-regex:
+          metavariable: $VAL
+          regex: .{8,}
+    metadata:
+      owasp: OWASP A02:2021 - Cryptographic Failures
+      cwe: CWE-798
+
+  - id: config-hardcoded-secret
+    message: Potential hardcoded secret in config file.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include:
+        - "**/*.properties"
+        - "**/*.yml"
+        - "**/*.yaml"
+        - "**/*.json"
+        - "**/*.env"
+    pattern-regex: (?i)(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)\s*[:=]\s*["']?[A-Za-z0-9_\-\/+]{8,}["']?
+    metadata:
+      owasp: OWASP A02:2021 - Cryptographic Failures
+      cwe: CWE-798
+

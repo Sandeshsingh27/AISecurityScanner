@@ -123,6 +123,7 @@ public class SemgrepService {
         args.add("--config");
         args.add(configToUse);
         args.add("--json");
+        args.add("--no-git-ignore");
         if (properties.getSemgrep().getJobs() > 0) {
             args.add("--jobs");
             args.add(String.valueOf(properties.getSemgrep().getJobs()));
