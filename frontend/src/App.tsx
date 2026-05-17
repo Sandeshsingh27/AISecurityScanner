@@ -26,7 +26,7 @@ const defaultRequest: ScanRequest = {
   externalFindings: []
 };
 
-type DashboardTab = "overview" | "findings" | "quality" | "dependencies" | "hotspots" | "details";
+type DashboardTab = "overview" | "findings" | "hotspots" | "details";
 
 function readInitialRequest(): ScanRequest {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -248,12 +248,6 @@ function App(): JSX.Element {
               <button className={activeTab === "findings" ? "tab-btn active" : "tab-btn"} onClick={() => setActiveTab("findings")}>
                 Findings
               </button>
-              <button className={activeTab === "quality" ? "tab-btn active" : "tab-btn"} onClick={() => setActiveTab("quality")}>
-                Quality Gate
-              </button>
-              <button className={activeTab === "dependencies" ? "tab-btn active" : "tab-btn"} onClick={() => setActiveTab("dependencies")}>
-                Dependencies
-              </button>
               <button className={activeTab === "hotspots" ? "tab-btn active" : "tab-btn"} onClick={() => setActiveTab("hotspots")}>
                 Hotspots
               </button>
@@ -315,6 +309,60 @@ function App(): JSX.Element {
                         <Tooltip />
                       </PieChart>
                     </ResponsiveContainer>
+                  </article>
+                </section>
+
+                <section className="split-grid">
+                  <article className="panel">
+                    <h3>Quality gate metrics</h3>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Metric</th>
+                          <th>Value</th>
+                          <th>Threshold</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.qualityGateMetrics.map((metric) => (
+                          <tr key={metric.name}>
+                            <td>{metric.name}</td>
+                            <td>{metric.value}</td>
+                            <td>{metric.threshold}</td>
+                            <td className={metric.passed ? "ok" : "bad"}>{metric.passed ? "PASS" : "FAIL"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </article>
+
+                  <article className="panel">
+                    <h3>Dependency audit</h3>
+                    <div className="table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Package</th>
+                            <th>Current</th>
+                            <th>Vulnerable below</th>
+                            <th>CVE</th>
+                            <th>Severity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.dependencyAudit.map((item) => (
+                            <tr key={`${item.packageName}-${item.cve}`}>
+                              <td>{item.packageName}</td>
+                              <td>{item.currentVersion}</td>
+                              <td>{item.vulnerableBelow}</td>
+                              <td>{item.cve}</td>
+                              <td>{item.severity}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </article>
                 </section>
               </>
@@ -384,62 +432,6 @@ function App(): JSX.Element {
                   </tbody>
                 </table>
               </div>
-              </section>
-            ) : null}
-
-            {activeTab === "quality" ? (
-              <section className="panel">
-                <h3>Quality gate metrics</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Metric</th>
-                      <th>Value</th>
-                      <th>Threshold</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.qualityGateMetrics.map((metric) => (
-                      <tr key={metric.name}>
-                        <td>{metric.name}</td>
-                        <td>{metric.value}</td>
-                        <td>{metric.threshold}</td>
-                        <td className={metric.passed ? "ok" : "bad"}>{metric.passed ? "PASS" : "FAIL"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            ) : null}
-
-            {activeTab === "dependencies" ? (
-              <section className="panel">
-                <h3>Dependency audit</h3>
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Package</th>
-                        <th>Current</th>
-                        <th>Vulnerable below</th>
-                        <th>CVE</th>
-                        <th>Severity</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.dependencyAudit.map((item) => (
-                        <tr key={`${item.packageName}-${item.cve}`}>
-                          <td>{item.packageName}</td>
-                          <td>{item.currentVersion}</td>
-                          <td>{item.vulnerableBelow}</td>
-                          <td>{item.cve}</td>
-                          <td>{item.severity}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </section>
             ) : null}
 
