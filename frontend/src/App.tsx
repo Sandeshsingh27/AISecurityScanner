@@ -61,11 +61,6 @@ function bySeverity<T extends { severity: Severity }>(list: T[]): Record<Severit
   );
 }
 
-function parseThresholdValue(threshold: string): number | null {
-  const match = threshold.match(/(\d+(\.\d+)?)/);
-  return match ? Number.parseFloat(match[1]) : null;
-}
-
 function isPassingQualityGate(status: string | undefined): boolean {
   return (status || "").toUpperCase().startsWith("PASS");
 }
@@ -138,9 +133,6 @@ function App(): JSX.Element {
     }
     return report.qualityGateMetrics.find((metric) => metric.name === "Avg Complexity (hot paths)") || null;
   }, [report]);
-
-  const avgComplexityValue = complexityMetric ? Number.parseFloat(complexityMetric.value) : null;
-  const complexityThresholdValue = complexityMetric ? parseThresholdValue(complexityMetric.threshold) : null;
 
   const hotspotRatingData = useMemo(() => {
     if (!report) {
@@ -359,19 +351,20 @@ function App(): JSX.Element {
                   </article>
                 </section>
 
-                {!complexityMetric?.passed && avgComplexityValue !== null && complexityThresholdValue !== null ? (
-                  <section className="panel info-banner">
-                    <strong>Quality gate failed due to complexity, not findings.</strong>
-                    <p className="muted">
-                      Avg complexity is {avgComplexityValue.toFixed(1)} with threshold {complexityThresholdValue.toFixed(1)}. This metric is based on
-                      `complexityHotspots`, so Findings can be empty while the gate still fails.
-                    </p>
-                  </section>
-                ) : null}
-
                 <section className="split-grid">
                   <article className="panel">
-                    <h3>Quality gate metrics</h3>
+                    <div className="metrics-header-row">
+                      <h3>Quality gate metrics</h3>
+                      {!complexityMetric?.passed ? (
+                        <span
+                          className="metric-info metric-info-top-right"
+                          tabIndex={0}
+                          aria-label="Complexity metric info"
+                          data-tooltip={`Quality gate failed due to complexity, not findings. Avg complexity is ${complexityMetric?.value ?? "n/a"} with threshold ${complexityMetric?.threshold ?? "n/a"}. This metric is based on complexity hotspots.`}>
+                          i
+                        </span>
+                      ) : null}
+                    </div>
                     <table>
                       <thead>
                         <tr>
