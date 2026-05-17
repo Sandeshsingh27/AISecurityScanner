@@ -46,7 +46,8 @@ The scanner supports both API and CLI usage, can ingest external agent findings,
 
 
 Frontend:  
-<img width="924" height="339" alt="image" src="https://github.com/user-attachments/assets/13858a3c-e411-4292-9aba-293293380a96" />
+<img width="924" height="339" alt="image" src="https://github.com/user-attachments/assets/0347edd3-996a-42b8-94a7-9049e128e9af" />
+
 
 Backend:  
 <img src="img.png" width="924" height="339" alt="AI Security Scanner screenshot 1" />
