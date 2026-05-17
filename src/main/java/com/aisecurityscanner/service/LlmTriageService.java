@@ -179,36 +179,48 @@ public class LlmTriageService {
         if (start < 0) {
             return null;
         }
-        int depth = 0;
-        boolean inString = false;
-        boolean escape = false;
+        JsonScanState state = new JsonScanState();
         for (int i = start; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (escape) {
-                escape = false;
-                continue;
-            }
-            if (c == '\\') {
-                escape = true;
-                continue;
-            }
-            if (c == '"') {
-                inString = !inString;
-                continue;
-            }
-            if (inString) {
-                continue;
-            }
-            if (c == '{') {
-                depth++;
-            } else if (c == '}') {
-                depth--;
-                if (depth == 0) {
+            if (applyJsonChar(state, text.charAt(i))) {
+                if (state.depth == 0) {
                     return text.substring(start, i + 1);
                 }
             }
         }
         return null;
+    }
+
+    private boolean applyJsonChar(JsonScanState state, char c) {
+        if (state.escape) {
+            state.escape = false;
+            return false;
+        }
+        if (c == '\\') {
+            state.escape = true;
+            return false;
+        }
+        if (c == '"') {
+            state.inString = !state.inString;
+            return false;
+        }
+        if (state.inString) {
+            return false;
+        }
+        if (c == '{') {
+            state.depth++;
+            return true;
+        }
+        if (c == '}') {
+            state.depth--;
+            return true;
+        }
+        return false;
+    }
+
+    private static class JsonScanState {
+        private int depth;
+        private boolean inString;
+        private boolean escape;
     }
 
     private TriageResult fallback(SemgrepFinding finding, String context, boolean verified) {

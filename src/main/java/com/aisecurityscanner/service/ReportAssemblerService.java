@@ -119,27 +119,33 @@ public class ReportAssemblerService {
         String text = ((vulnerabilityType == null ? "" : vulnerabilityType) + " "
             + (title == null ? "" : title) + " "
             + (rule == null ? "" : rule)).toLowerCase(Locale.ROOT);
-        if (text.contains("secret") || text.contains("password") || text.contains("api key") || text.contains("apikey") || text.contains("token") || text.contains("private key")) {
+        if (containsAny(text, "secret", "password", "api key", "apikey", "token", "private key")) {
             return "Hardcoded Secret";
         }
-        if (text.contains("sql injection") || text.contains("xss") || text.contains("cross-site")
-            || text.contains("command injection") || text.contains("path traversal") || text.contains("deserialization")
-            || text.contains("ssrf") || text.contains("csrf") || text.contains("permitall") || text.contains("trustmanager")
-            || text.contains("weak hash") || text.contains("weak crypto") || text.contains("ecb") || text.contains("cwe-")) {
+        if (containsAny(text,
+            "sql injection", "xss", "cross-site", "command injection", "path traversal", "deserialization",
+            "ssrf", "csrf", "permitall", "trustmanager", "weak hash", "weak crypto", "ecb", "cwe-")) {
             return "Vulnerability";
         }
-        if (text.contains("hotspot") || text.contains("random") || text.contains("http://") || text.contains("debug")) {
+        if (containsAny(text, "hotspot", "random", "http://", "debug")) {
             return "Security Hotspot";
         }
-        if (text.contains("todo") || text.contains("system.out") || text.contains("console.log")
-            || text.contains("wildcard") || text.contains("show-sql") || text.contains("smell")) {
+        if (containsAny(text, "todo", "system.out", "console.log", "wildcard", "show-sql", "smell")) {
             return "Code Smell";
         }
-        if (text.contains("printstacktrace") || text.contains("broad catch") || text.contains("empty catch")
-            || text.contains("== ") || text.contains("bug")) {
+        if (containsAny(text, "printstacktrace", "broad catch", "empty catch", "== ", "bug")) {
             return "Bug";
         }
         return "Vulnerability";
+    }
+
+    private boolean containsAny(String text, String... tokens) {
+        for (String token : tokens) {
+            if (text.contains(token)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<QualityGateMetric> buildMetrics(SecurityScanReport report) {

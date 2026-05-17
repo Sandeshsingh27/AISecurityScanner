@@ -205,16 +205,32 @@ public class CodeQualityAnalyzerService {
 
     private boolean isScannable(Path file) {
         String normalized = file.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
-        if (normalized.contains("/target/") || normalized.contains("/build/") || normalized.contains("/.git/")
-            || normalized.contains("/node_modules/") || normalized.contains("/.venv/") || normalized.contains("/venv/")
-            || normalized.contains("/dist/") || normalized.contains("/out/")) {
+        if (containsAnyPathSegment(normalized,
+            "/target/", "/build/", "/.git/", "/node_modules/", "/.venv/", "/venv/", "/dist/", "/out/")) {
             return false;
         }
         String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        return name.endsWith(".java") || name.endsWith(".js") || name.endsWith(".ts")
-            || name.endsWith(".jsx") || name.endsWith(".tsx") || name.endsWith(".py")
-            || name.endsWith(".properties") || name.endsWith(".yml") || name.endsWith(".yaml")
-            || name.endsWith(".env") || name.startsWith("dockerfile");
+        return hasAnySuffix(name,
+            ".java", ".js", ".ts", ".jsx", ".tsx", ".py", ".properties", ".yml", ".yaml", ".env")
+            || name.startsWith("dockerfile");
+    }
+
+    private boolean containsAnyPathSegment(String text, String... fragments) {
+        for (String fragment : fragments) {
+            if (text.contains(fragment)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasAnySuffix(String text, String... suffixes) {
+        for (String suffix : suffixes) {
+            if (text.endsWith(suffix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private StackType detectStack(String name, String relative) {

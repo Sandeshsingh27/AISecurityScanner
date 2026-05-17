@@ -61,6 +61,15 @@ function bySeverity<T extends { severity: Severity }>(list: T[]): Record<Severit
   );
 }
 
+function parseThresholdValue(threshold: string): number | null {
+  const match = threshold.match(/(\d+(\.\d+)?)/);
+  return match ? Number.parseFloat(match[1]) : null;
+}
+
+function isPassingQualityGate(status: string | undefined): boolean {
+  return (status || "").toUpperCase().startsWith("PASS");
+}
+
 function App(): JSX.Element {
   const [request, setRequest] = useState<ScanRequest>(readInitialRequest);
   const [report, setReport] = useState<SecurityScanReport | null>(null);
@@ -122,6 +131,28 @@ function App(): JSX.Element {
   }, [findings]);
 
   const criticalAndHigh = severityStats.CRITICAL + severityStats.HIGH;
+
+  const complexityMetric = useMemo(() => {
+    if (!report) {
+      return null;
+    }
+    return report.qualityGateMetrics.find((metric) => metric.name === "Avg Complexity (hot paths)") || null;
+  }, [report]);
+
+  const avgComplexityValue = complexityMetric ? Number.parseFloat(complexityMetric.value) : null;
+  const complexityThresholdValue = complexityMetric ? parseThresholdValue(complexityMetric.threshold) : null;
+
+  const hotspotRatingData = useMemo(() => {
+    if (!report) {
+      return [] as Array<{ name: string; value: number }>;
+    }
+    const counts = new Map<string, number>();
+    report.complexityHotspots.forEach((hotspot) => {
+      const key = hotspot.rating || "UNKNOWN";
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
+  }, [report]);
 
   async function runScan(): Promise<void> {
     setLoading(true);
@@ -266,7 +297,7 @@ function App(): JSX.Element {
                   </article>
                   <article className="panel stat-card">
                     <span className="label">Quality gate</span>
-                    <strong className={report.qualityGateStatus === "PASS" ? "ok" : "bad"}>{report.qualityGateStatus}</strong>
+                    <strong className={isPassingQualityGate(report.qualityGateStatus) ? "ok" : "bad"}>{report.qualityGateStatus}</strong>
                     <span className="muted">{report.filesScanned} files scanned</span>
                   </article>
                   <article className="panel stat-card">
@@ -278,6 +309,11 @@ function App(): JSX.Element {
                     <span className="label">Dependencies</span>
                     <strong>{report.dependencyAudit.length}</strong>
                     <span className="muted">Potential vulnerable packages</span>
+                  </article>
+                  <article className="panel stat-card">
+                    <span className="label">Avg complexity</span>
+                    <strong className={complexityMetric?.passed ? "ok" : "bad"}>{complexityMetric?.value ?? "n/a"}</strong>
+                    <span className="muted">Threshold {complexityMetric?.threshold ?? "n/a"}</span>
                   </article>
                 </section>
 
@@ -310,7 +346,28 @@ function App(): JSX.Element {
                       </PieChart>
                     </ResponsiveContainer>
                   </article>
+                  <article className="panel chart-card">
+                    <h3>Complexity hotspots by rating</h3>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={hotspotRatingData}>
+                        <XAxis dataKey="name" />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#8b5cf6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </article>
                 </section>
+
+                {!complexityMetric?.passed && avgComplexityValue !== null && complexityThresholdValue !== null ? (
+                  <section className="panel info-banner">
+                    <strong>Quality gate failed due to complexity, not findings.</strong>
+                    <p className="muted">
+                      Avg complexity is {avgComplexityValue.toFixed(1)} with threshold {complexityThresholdValue.toFixed(1)}. This metric is based on
+                      `complexityHotspots`, so Findings can be empty while the gate still fails.
+                    </p>
+                  </section>
+                ) : null}
 
                 <section className="split-grid">
                   <article className="panel">
@@ -432,6 +489,11 @@ function App(): JSX.Element {
                   </tbody>
                 </table>
               </div>
+              {filteredFindings.length === 0 && !complexityMetric?.passed ? (
+                <p className="muted">
+                  No matching findings. Quality gate can still fail on the complexity metric; check the Overview and Hotspots tabs.
+                </p>
+              ) : null}
               </section>
             ) : null}
 

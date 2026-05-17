@@ -119,13 +119,18 @@ button:disabled {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
 }
 
 .stat-card {
   display: grid;
   gap: 8px;
+}
+
+.stat-card strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .label {
@@ -262,6 +267,13 @@ pre {
   background: #1d4ed8;
   border-color: #1e40af;
   color: #ffffff;
+}
+
+.info-banner {
+  border-color: #7c3aed;
+  background: #1a1033;
+  display: grid;
+  gap: 6px;
 }
 
 @media (max-width: 1600px) {

@@ -263,16 +263,16 @@ public class SemgrepService {
 
     private Severity mapSeverity(String semgrepSeverity, String checkId, String message) {
         String text = (semgrepSeverity + " " + checkId + " " + message).toLowerCase(Locale.ROOT);
-        if (text.contains("critical") || text.contains("rce") || text.contains("remote code") || text.contains("hardcoded secret")) {
+        if (containsAny(text, "critical", "rce", "remote code", "hardcoded secret")) {
             return Severity.CRITICAL;
         }
-        if (text.contains("error") || text.contains("high") || text.contains("sql injection") || text.contains("xss") || text.contains("idor") || text.contains("path traversal")) {
+        if (containsAny(text, "error", "high", "sql injection", "xss", "idor", "path traversal")) {
             return Severity.HIGH;
         }
-        if (text.contains("warning") || text.contains("medium") || text.contains("csrf") || text.contains("misconfig") || text.contains("token")) {
+        if (containsAny(text, "warning", "medium", "csrf", "misconfig", "token")) {
             return Severity.MEDIUM;
         }
-        if (text.contains("info") || text.contains("low")) {
+        if (containsAny(text, "info", "low")) {
             return Severity.LOW;
         }
         return Severity.MEDIUM;
@@ -280,22 +280,22 @@ public class SemgrepService {
 
     private String classifyVulnerabilityType(SemgrepFinding finding) {
         String text = (finding.getCheckId() + " " + finding.getMessage()).toLowerCase(Locale.ROOT);
-        if (text.contains("sql")) {
+        if (containsAny(text, "sql")) {
             return "SQL Injection";
         }
-        if (text.contains("xss") || text.contains("html")) {
+        if (containsAny(text, "xss", "html")) {
             return "Cross-Site Scripting";
         }
-        if (text.contains("secret") || text.contains("password") || text.contains("apikey") || text.contains("api key")) {
+        if (containsAny(text, "secret", "password", "apikey", "api key")) {
             return "Hardcoded Secret";
         }
-        if (text.contains("auth") || text.contains("permission") || text.contains("idor") || text.contains("access")) {
+        if (containsAny(text, "auth", "permission", "idor", "access")) {
             return "Broken Access Control";
         }
-        if (text.contains("path traversal") || text.contains("traversal")) {
+        if (containsAny(text, "path traversal", "traversal")) {
             return "Path Traversal";
         }
-        if (text.contains("command") || text.contains("exec")) {
+        if (containsAny(text, "command", "exec")) {
             return "Command Injection";
         }
         return "Security Hotspot";
@@ -303,10 +303,10 @@ public class SemgrepService {
 
     private StackType detectStackFromPath(String path) {
         String normalized = path == null ? "" : path.toLowerCase(Locale.ROOT);
-        if (normalized.endsWith(".java") || normalized.endsWith(".kt")) {
+        if (hasSuffix(normalized, ".java", ".kt")) {
             return StackType.JAVA_SPRING_BOOT;
         }
-        if (normalized.endsWith(".tsx") || normalized.endsWith(".jsx") || normalized.endsWith(".ts") || normalized.endsWith(".js")) {
+        if (hasSuffix(normalized, ".tsx", ".jsx", ".ts", ".js")) {
             return StackType.REACT_TYPESCRIPT;
         }
         if (normalized.endsWith(".py")) {
@@ -319,6 +319,24 @@ public class SemgrepService {
             return StackType.CONFIG;
         }
         return StackType.UNKNOWN;
+    }
+
+    private boolean containsAny(String text, String... tokens) {
+        for (String token : tokens) {
+            if (text.contains(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasSuffix(String text, String... suffixes) {
+        for (String suffix : suffixes) {
+            if (text.endsWith(suffix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String read(InputStream inputStream) throws IOException {

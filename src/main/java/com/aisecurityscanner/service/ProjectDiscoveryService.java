@@ -24,42 +24,17 @@ public class ProjectDiscoveryService {
                 String name = file.getFileName().toString();
                 String normalized = file.toString().replace('\\', '/').toLowerCase();
                 String content = safeRead(file);
-                if ("pom.xml".equals(name) || normalized.endsWith(".java") || content.contains("@RestController") || content.contains("springframework.boot")) {
-                    stacks.add(StackType.JAVA_SPRING_BOOT);
-                }
-                if ("package.json".equals(name) && content.contains("\"react\"")) {
-                    stacks.add(StackType.REACT_TYPESCRIPT);
-                }
-                if (name.endsWith(".tsx") || name.endsWith(".jsx") || normalized.contains("next.config")) {
-                    stacks.add(StackType.REACT_TYPESCRIPT);
-                }
-                if ("angular.json".equals(name) || name.endsWith(".component.ts") || name.endsWith(".service.ts")) {
-                    stacks.add(StackType.ANGULAR);
-                }
-                if (name.endsWith(".vue") || normalized.endsWith("vue.config.js")) {
-                    stacks.add(StackType.VUE);
-                }
-                if ("package.json".equals(name) && content.contains("\"express\"")) {
-                    stacks.add(StackType.NODE_EXPRESS);
-                }
-                if ("requirements.txt".equals(name) || "manage.py".equals(name) || name.endsWith("settings.py")) {
-                    stacks.add(StackType.PYTHON_DJANGO);
-                }
-                if (name.endsWith(".py") && content.contains("FastAPI(")) {
-                    stacks.add(StackType.PYTHON_FASTAPI);
-                }
-                if (name.endsWith(".py") && content.contains("Flask(")) {
-                    stacks.add(StackType.PYTHON_FLASK);
-                }
-                if (name.startsWith("Dockerfile") || normalized.contains("docker-compose")) {
-                    stacks.add(StackType.DOCKER);
-                }
-                if (normalized.contains(".github/workflows") || ".gitlab-ci.yml".equals(name)) {
-                    stacks.add(StackType.CICD);
-                }
-                if (name.endsWith(".properties") || name.endsWith(".yml") || name.endsWith(".yaml") || name.endsWith(".env") || name.endsWith(".json")) {
-                    stacks.add(StackType.CONFIG);
-                }
+                addIf(stacks, isJavaSpringBoot(name, normalized, content), StackType.JAVA_SPRING_BOOT);
+                addIf(stacks, isReactTypeScript(name, normalized, content), StackType.REACT_TYPESCRIPT);
+                addIf(stacks, isAngular(name), StackType.ANGULAR);
+                addIf(stacks, isVue(name, normalized), StackType.VUE);
+                addIf(stacks, isNodeExpress(name, content), StackType.NODE_EXPRESS);
+                addIf(stacks, isPythonDjango(name), StackType.PYTHON_DJANGO);
+                addIf(stacks, isPythonFastApi(name, content), StackType.PYTHON_FASTAPI);
+                addIf(stacks, isPythonFlask(name, content), StackType.PYTHON_FLASK);
+                addIf(stacks, isDocker(name, normalized), StackType.DOCKER);
+                addIf(stacks, isCiCd(name, normalized), StackType.CICD);
+                addIf(stacks, isConfigFile(name), StackType.CONFIG);
             }
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to inspect target path: " + targetPath, ex);
@@ -68,6 +43,61 @@ public class ProjectDiscoveryService {
             stacks.add(StackType.UNKNOWN);
         }
         return stacks;
+    }
+
+    private void addIf(Set<StackType> stacks, boolean condition, StackType stackType) {
+        if (condition) {
+            stacks.add(stackType);
+        }
+    }
+
+    private boolean isJavaSpringBoot(String name, String normalized, String content) {
+        return "pom.xml".equals(name) || normalized.endsWith(".java")
+            || content.contains("@RestController") || content.contains("springframework.boot");
+    }
+
+    private boolean isReactTypeScript(String name, String normalized, String content) {
+        if ("package.json".equals(name) && content.contains("\"react\"")) {
+            return true;
+        }
+        return name.endsWith(".tsx") || name.endsWith(".jsx") || normalized.contains("next.config");
+    }
+
+    private boolean isAngular(String name) {
+        return "angular.json".equals(name) || name.endsWith(".component.ts") || name.endsWith(".service.ts");
+    }
+
+    private boolean isVue(String name, String normalized) {
+        return name.endsWith(".vue") || normalized.endsWith("vue.config.js");
+    }
+
+    private boolean isNodeExpress(String name, String content) {
+        return "package.json".equals(name) && content.contains("\"express\"");
+    }
+
+    private boolean isPythonDjango(String name) {
+        return "requirements.txt".equals(name) || "manage.py".equals(name) || name.endsWith("settings.py");
+    }
+
+    private boolean isPythonFastApi(String name, String content) {
+        return name.endsWith(".py") && content.contains("FastAPI(");
+    }
+
+    private boolean isPythonFlask(String name, String content) {
+        return name.endsWith(".py") && content.contains("Flask(");
+    }
+
+    private boolean isDocker(String name, String normalized) {
+        return name.startsWith("Dockerfile") || normalized.contains("docker-compose");
+    }
+
+    private boolean isCiCd(String name, String normalized) {
+        return normalized.contains(".github/workflows") || ".gitlab-ci.yml".equals(name);
+    }
+
+    private boolean isConfigFile(String name) {
+        return name.endsWith(".properties") || name.endsWith(".yml") || name.endsWith(".yaml")
+            || name.endsWith(".env") || name.endsWith(".json");
     }
 
     public int countFiles(Path targetPath) {
