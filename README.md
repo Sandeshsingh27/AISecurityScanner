@@ -489,6 +489,58 @@ It:
 - optionally runs the scanner in CLI mode
 - can fail the build based on the quality gate
 
+## Frontend dashboard (SonarQube-style)
+
+A React + TypeScript dashboard is available in `frontend/` for visual triage and exploration of scan results.
+
+### Frontend features
+
+- Live scan trigger from UI (`POST /api/scans/report`)
+- SonarQube-style visibility for findings, quality gate status, dependency CVEs, and complexity hotspots
+- Severity and category charts for quick risk distribution analysis
+- Powerful finding filters (severity, category, keyword, LLM-verified only)
+- Click-to-inspect details panel (evidence, taint chain, explanation, fix, suggested code)
+- Export current report as formatted JSON
+- Request form persisted in browser local storage for fast repeated scans
+
+### Run the frontend
+
+1) Start backend API (port `8080`):
+
+```powershell
+mvn spring-boot:run
+```
+
+2) In a separate terminal, run the frontend:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+The Vite dev server proxies `/api/*` to `http://localhost:8080` by default.
+
+### Frontend production build
+
+```powershell
+cd frontend
+npm run build
+npm run preview
+```
+
+### Optional frontend API base URL override
+
+If you want the frontend to call a non-default API host directly, set `VITE_API_BASE_URL`:
+
+```powershell
+cd frontend
+$env:VITE_API_BASE_URL = "http://localhost:8080"
+npm run dev
+```
+
 ## Notes
 
 - Semgrep must be installed separately.

@@ -1,0 +1,303 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, Segoe UI, Arial, sans-serif;
+  line-height: 1.4;
+  font-weight: 400;
+  background: #0b1020;
+  color: #e5e7eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #1e293b 0%, #0b1020 45%);
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.panel {
+  background: #0f172a;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  padding: 14px;
+  min-width: 0;
+}
+
+.request-panel,
+.details-panel {
+  position: sticky;
+  top: 12px;
+  height: calc(100vh - 24px);
+  overflow: auto;
+  z-index: 5;
+}
+
+.dashboard-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+
+label {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+input,
+select,
+button {
+  width: 100%;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+button {
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: #2563eb;
+  border-color: #1d4ed8;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toggle-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.toggle-row label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 0;
+}
+
+.toggle-row input {
+  width: auto;
+  margin: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  display: grid;
+  gap: 8px;
+}
+
+.label {
+  color: #94a3b8;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.charts-grid,
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chart-card {
+  min-height: 280px;
+}
+
+.filters-row {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1.8fr 1fr 1fr 180px;
+  gap: 8px;
+}
+
+.filters-row label {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.filters-row label input {
+  width: auto;
+}
+
+.table-scroll {
+  margin-top: 10px;
+  overflow: auto;
+  max-height: 380px;
+  max-width: 100%;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #1f2937;
+  padding: 8px;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+tbody tr {
+  cursor: pointer;
+}
+
+tbody tr:hover {
+  background: #111c33;
+}
+
+.severity-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #020617;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 6px;
+  margin-bottom: 10px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.muted {
+  color: #94a3b8;
+}
+
+.ok {
+  color: #22c55e;
+}
+
+.bad {
+  color: #ef4444;
+}
+
+.error {
+  margin-top: 8px;
+  color: #fca5a5;
+}
+
+.empty-state {
+  min-height: 240px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.tab-panel {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tab-btn {
+  margin-top: 0;
+  background: #111827;
+  border: 1px solid #334155;
+}
+
+.tab-btn.active {
+  background: #1d4ed8;
+  border-color: #1e40af;
+  color: #ffffff;
+}
+
+@media (max-width: 1600px) {
+  .app-shell {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .details-panel {
+    grid-column: span 2;
+    height: auto;
+    position: static;
+  }
+}
+
+@media (max-width: 1180px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .request-panel,
+  .details-panel {
+    position: static;
+    height: auto;
+  }
+
+  .stats-grid,
+  .charts-grid,
+  .split-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filters-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

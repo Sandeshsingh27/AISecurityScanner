@@ -4,4 +4,7 @@ target/
 *.log
 .env
 security-report.md
-
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
