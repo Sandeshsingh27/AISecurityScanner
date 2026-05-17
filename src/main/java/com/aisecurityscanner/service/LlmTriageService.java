@@ -5,6 +5,7 @@ import com.aisecurityscanner.model.SemgrepFinding;
 import com.aisecurityscanner.model.TriageResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -66,14 +67,14 @@ public class LlmTriageService {
         }
         try {
             return callLlm(finding, context);
-        } catch (Exception ex) {
+        } catch (IOException | RuntimeException ex) {
             log.warn("LLM triage call failed for {}:{} ({}): {}. Falling back to deterministic explanation.",
                 finding.getFilePath(), finding.getLine(), ex.getClass().getSimpleName(), ex.getMessage());
             return fallback(finding, context, false);
         }
     }
 
-    private TriageResult callLlm(SemgrepFinding finding, String context) throws Exception {
+    private TriageResult callLlm(SemgrepFinding finding, String context) throws IOException {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(properties.getLlm().getApiKey());
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -130,15 +131,15 @@ public class LlmTriageService {
         String cleaned = stripCodeFences(content == null ? "" : content.trim());
         try {
             return objectMapper.readTree(cleaned);
-        } catch (Exception ignored) {
-            // try to extract the first {...} block
+        } catch (IOException parseError) {
+            log.debug("Primary LLM JSON parse failed for {}:{}; trying first-object extraction", finding.getFilePath(), finding.getLine(), parseError);
         }
         String candidate = extractFirstJsonObject(cleaned);
         if (candidate != null) {
             try {
                 return objectMapper.readTree(candidate);
-            } catch (Exception ignored) {
-                // fall through to synthetic node
+            } catch (IOException parseError) {
+                log.debug("Extracted JSON parse failed for {}:{}; using synthetic fallback", finding.getFilePath(), finding.getLine(), parseError);
             }
         }
         log.warn("LLM returned non-JSON content for {}:{}; using raw text as explanation.",

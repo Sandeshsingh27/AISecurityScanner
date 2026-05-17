@@ -67,6 +67,12 @@ public class ComplexityAnalyzerService {
 	}
 
 	private boolean isSupportedCodeFile(Path file) {
+		String normalized = file.toString().replace('\\', '/').toLowerCase(Locale.ROOT);
+		if (normalized.contains("/node_modules/") || normalized.contains("/.vite/") || normalized.contains("/dist/")
+			|| normalized.contains("/target/") || normalized.contains("/build/") || normalized.contains("/.git/")
+			|| normalized.contains("/.venv/") || normalized.contains("/venv/")) {
+			return false;
+		}
 		String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
 		return name.endsWith(".java") || name.endsWith(".js") || name.endsWith(".ts") || name.endsWith(".py");
 	}

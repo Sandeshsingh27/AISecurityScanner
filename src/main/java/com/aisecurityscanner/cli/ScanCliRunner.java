@@ -6,6 +6,11 @@ import com.aisecurityscanner.model.SecurityScanReport;
 import com.aisecurityscanner.service.MarkdownReportRenderer;
 import com.aisecurityscanner.service.ScanOrchestratorService;
 import com.aisecurityscanner.web.dto.ScanRequest;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -41,10 +46,16 @@ public class ScanCliRunner implements ApplicationRunner {
         request.setExternalFindings(new ArrayList<com.aisecurityscanner.web.dto.ExternalFindingRequest>());
 
         SecurityScanReport report = scanOrchestratorService.scan(request);
-        System.out.println(markdownReportRenderer.render(report));
+        printToStdout(markdownReportRenderer.render(report));
 
         if (properties.getCli().isFailOnQualityGate() && report.getQualityGateStatus() == QualityGateStatus.FAILED) {
             throw new IllegalStateException("Quality gate failed.");
         }
+    }
+
+    private void printToStdout(String content) {
+        PrintWriter writer = new PrintWriter(new OutputStreamWriter(new FileOutputStream(FileDescriptor.out), StandardCharsets.UTF_8), true);
+        writer.println(content);
+        writer.flush();
     }
 }

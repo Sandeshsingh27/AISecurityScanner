@@ -17,8 +17,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.springframework.stereotype.Service;
+import org.xml.sax.SAXException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -85,7 +87,7 @@ public class DependencyAuditService {
 					maybeAdd(findings, artifactId, version);
 				}
 			}
-		} catch (Exception ex) {
+		} catch (ParserConfigurationException | SAXException | IOException ex) {
 			throw new IllegalStateException("Failed to parse pom.xml: " + pomPath, ex);
 		}
 		return findings;

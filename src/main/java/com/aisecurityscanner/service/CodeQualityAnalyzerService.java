@@ -14,6 +14,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,6 +31,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CodeQualityAnalyzerService {
+
+    private static final Logger log = LoggerFactory.getLogger(CodeQualityAnalyzerService.class);
 
     private static final int MAX_FILES_SCANNED = 5000;
     private static final int MAX_FINDINGS_PER_RULE = 50;
@@ -65,12 +69,18 @@ public class CodeQualityAnalyzerService {
                 analyzeFile(targetPath, file, findings);
             }
         } catch (IOException ex) {
-            // never fail the whole scan because of quality analysis
+            // Never fail the overall scan because quality heuristics could not walk the tree.
+            log.debug("Code quality analyzer could not walk {}", targetPath, ex);
         }
         return findings;
     }
 
     private void analyzeFile(Path root, Path file, List<SecurityFinding> findings) {
+        String relative = root.relativize(file).toString().replace('\\', '/');
+        // Skip this file itself to avoid reporting its own rule regex declarations as findings.
+        if (relative.endsWith("CodeQualityAnalyzerService.java")) {
+            return;
+        }
         try {
             if (Files.size(file) > MAX_FILE_BYTES) {
                 return;
@@ -85,7 +95,6 @@ public class CodeQualityAnalyzerService {
             return;
         }
         String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        String relative = root.relativize(file).toString().replace('\\', '/');
         StackType stack = detectStack(name, relative);
 
         List<RulePattern> applicable = new ArrayList<>(genericRules);
@@ -118,6 +127,9 @@ public class CodeQualityAnalyzerService {
                     if (rule.requireWordBoundary && !looksLikeRealMatch(line, matcher)) {
                         continue;
                     }
+                    if (shouldSkipMatch(rule, line)) {
+                        continue;
+                    }
                     findings.add(buildFinding(rule, relative, stack, i + 1, line.trim()));
                     matchCount++;
                     if (matchCount >= MAX_FINDINGS_PER_RULE) {
@@ -130,7 +142,22 @@ public class CodeQualityAnalyzerService {
 
     private boolean looksLikeRealMatch(String line, Matcher matcher) {
         String trimmed = line.trim();
-        return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("#");
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("#")) {
+            return false;
+        }
+        return !trimmed.startsWith("\"") && !trimmed.contains("rule(\"");
+    }
+
+
+    private boolean shouldSkipMatch(RulePattern rule, String line) {
+        String normalized = line.toLowerCase(Locale.ROOT);
+        if ("java-http-url".equals(rule.id)) {
+            return normalized.contains("apache.org/xml/features/")
+                || normalized.contains("w3.org/")
+                || normalized.contains("xmlns")
+                || normalized.contains("schema");
+        }
+        return false;
     }
 
     private void detectEmptyCatch(String relative, StackType stack, List<String> lines, List<SecurityFinding> findings) {
@@ -311,7 +338,7 @@ public class CodeQualityAnalyzerService {
             "Code Smell", Severity.INFO, "//.*\\b(TODO|FIXME|XXX)\\b",
             "Unfinished work", "Track in issue tracker.", true));
         jsRules.add(rule("js-http-url", "Plain HTTP URL",
-            "Security Hotspot", Severity.LOW, "[\"']http://[^\"']+[\"']",
+            "Security Hotspot", Severity.LOW, "[\"']http://(?!localhost(?::\\d+)?|127\\.0\\.0\\.1(?::\\d+)?)[^\"']+[\"']",
             "Unencrypted protocol", "Use HTTPS."));
         jsRules.add(rule("js-math-random", "Math.random() used — not cryptographically secure",
             "Security Hotspot", Severity.MEDIUM, "Math\\.random\\s*\\(",
