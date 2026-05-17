@@ -547,3 +547,124 @@ npm run dev
 - If no LLM is configured, the app still works using deterministic fallback remediation guidance.
 - Complexity scoring is heuristic, intended as a fast SonarQube-style hotspot indicator.
 
+## Scan request field reference
+
+Use this section for `POST /api/scans/report` and `POST /api/scans/report/markdown` payloads.
+
+### Field-by-field meaning
+
+- `targetPath`
+  - Absolute/local path to the repository the backend will scan.
+  - Example: `C:/Users/ssi51/CRSNG/bcom-v3`.
+  - If invalid or unreadable, the scan fails early.
+
+- `semgrepConfig`
+  - Semgrep rules source used by `SemgrepService`.
+  - `semgrep-rules/offline-security.yml` = local offline rule pack (deterministic/corporate/offline friendly).
+  - Can also be hosted packs like `auto` or `p/java` (if network/SSL policy allows).
+
+- `fastScan`
+  - Performance mode toggle for Semgrep execution.
+  - `true` applies fast-oriented options/timeouts/excludes (configured by `scanner.semgrep.fast-*`) and usually reduces runtime on large repos.
+  - Tradeoff: potentially less depth/coverage than slower full scans.
+
+- `llmEnabled`
+  - Per-request toggle for LLM triage on findings.
+  - `false` = deterministic explanations/fixes only.
+  - `true` = attempts live LLM enrichment if API key is configured; otherwise falls back deterministically.
+  - Even with LLM disabled, the scanner still returns findings, categories, and reports.
+
+- `includeDependencyAudit`
+  - Enables dependency manifest parsing and matching against the built-in vulnerability catalog.
+  - `true` adds `dependencyAudit` findings for `pom.xml`, `package.json`, and `requirements.txt` (when present).
+  - `false` skips this step for faster runs.
+
+- `maxFindingsForLlm`
+  - Upper bound of findings sent to LLM triage in one request.
+  - Helps control latency/cost.
+  - If `llmEnabled` is `false`, this value is effectively ignored.
+
+- `externalFindings`
+  - Manual list of additional findings (from external tools/agents) merged into the final report.
+  - `[]` means no external findings are added.
+  - Useful for centralized reporting and a single quality gate.
+
+### What this exact payload does
+
+With:
+
+```json
+{
+  "targetPath": "C:/Users/ssi51/CRSNG/bcom-v3",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": []
+}
+```
+
+you are asking the scanner to:
+
+- Run a fast Semgrep scan on `bcom-v3` using local offline rules.
+- Skip LLM triage and use deterministic explanations.
+- Include dependency CVE checks.
+- Produce a unified SonarQube-style report from:
+  - Semgrep findings
+  - internal code-quality analyzer findings (bugs/smells/hotspots/vulnerabilities)
+  - dependency audit findings
+  - no externally injected findings
+
+### Practical tuning recommendations
+
+- CI baseline: keep deterministic + fast + dependency-aware (`fastScan=true`, `llmEnabled=false`, `includeDependencyAudit=true`).
+- Deep/manual review runs:
+  - set `fastScan` to `false`
+  - optionally set `llmEnabled` to `true`
+  - increase `maxFindingsForLlm` (for example `20` to `30`) for richer triage context
+- If coverage seems low, try `semgrepConfig: "auto"` when your environment allows hosted rules.
+
+### Ready-made request profiles
+
+#### `quick-ci`
+
+```json
+{
+  "targetPath": "C:/path/to/repo",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": true,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 10,
+  "externalFindings": []
+}
+```
+
+#### `balanced`
+
+```json
+{
+  "targetPath": "C:/path/to/repo",
+  "semgrepConfig": "semgrep-rules/offline-security.yml",
+  "fastScan": false,
+  "llmEnabled": false,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 15,
+  "externalFindings": []
+}
+```
+
+#### `deep-audit`
+
+```json
+{
+  "targetPath": "C:/path/to/repo",
+  "semgrepConfig": "auto",
+  "fastScan": false,
+  "llmEnabled": true,
+  "includeDependencyAudit": true,
+  "maxFindingsForLlm": 30,
+  "externalFindings": []
+}
+```
