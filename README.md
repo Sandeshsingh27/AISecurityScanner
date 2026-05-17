@@ -43,8 +43,14 @@ The scanner supports both API and CLI usage, can ingest external agent findings,
 - Supports **REST API** and **CLI mode** for CI/CD pipelines
 - Allows importing findings from an **external security agent** and merges them into the final report
 
-![img.png](img.png)
-![img_1.png](img_1.png)
+
+
+Frontend:  
+<img width="924" height="339" alt="image" src="https://github.com/user-attachments/assets/13858a3c-e411-4292-9aba-293293380a96" />
+
+Backend:  
+<img src="img.png" width="924" height="339" alt="AI Security Scanner screenshot 1" />
+<img src="img_1.png" width="924" height="339" alt="AI Security Scanner screenshot 2" />
 
 ## Architecture
 
