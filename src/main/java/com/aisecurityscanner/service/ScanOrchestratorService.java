@@ -63,7 +63,8 @@ public class ScanOrchestratorService {
         Set<StackType> stacks = projectDiscoveryService.detectStacks(targetPath);
         int filesScanned = projectDiscoveryService.countFiles(targetPath);
         List<String> attackSurface = projectDiscoveryService.discoverAttackSurface(targetPath);
-        List<SemgrepFinding> semgrepFindings = semgrepService.scan(targetPath, request.getSemgrepConfig(), request.isFastScan());
+        // Keep Semgrep config backend-controlled using server properties.
+        List<SemgrepFinding> semgrepFindings = semgrepService.scan(targetPath, properties.getSemgrep().getDefaultConfig(), request.isFastScan());
 
         List<TriageResult> triageResults = new ArrayList<TriageResult>();
         int llmLimit = request.getMaxFindingsForLlm() > 0 ? request.getMaxFindingsForLlm() : properties.getReport().getMaxFindingsForLlm();

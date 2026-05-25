@@ -45,11 +45,11 @@ public class MarkdownReportRenderer {
         appendCompactLowAndInfo(builder, report.getFindings());
         builder.append("\n---\n\n");
         builder.append("## Dependency Audit\n\n");
-        builder.append("| Package | Current Version | Vulnerable | CVE | Severity |\n");
+        builder.append("| Package | Current Version | Recommended Fixed Version | CVE | Severity |\n");
         builder.append("|---|---|---|---|---|\n");
         for (DependencyFinding finding : report.getDependencyAudit()) {
             builder.append("| `").append(finding.getPackageName()).append("` | `").append(finding.getCurrentVersion())
-                .append("` | `< ").append(finding.getVulnerableBelow())
+                .append("` | `>= ").append(finding.getVulnerableBelow())
                 .append("` | ").append(finding.getCve())
                 .append(" | ").append(toSeverityBadge(finding.getSeverity())).append(" |\n");
         }

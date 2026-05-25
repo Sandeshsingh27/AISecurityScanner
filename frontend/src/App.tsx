@@ -17,7 +17,6 @@ const severityColor: Record<Severity, string> = {
 
 const defaultRequest: ScanRequest = {
   targetPath: "",
-  semgrepConfig: "semgrep-rules/offline-security.yml",
   fastScan: true,
   llmEnabled: false,
   includeDependencyAudit: true,
@@ -187,13 +186,6 @@ function App(): JSX.Element {
           value={request.targetPath}
           onChange={(event) => setRequest({ ...request, targetPath: event.target.value })}
           placeholder="C:/repos/my-service"
-        />
-
-        <label>Semgrep config</label>
-        <input
-          value={request.semgrepConfig}
-          onChange={(event) => setRequest({ ...request, semgrepConfig: event.target.value })}
-          placeholder="semgrep-rules/offline-security.yml"
         />
 
         <div className="toggle-row">
@@ -395,7 +387,7 @@ function App(): JSX.Element {
                           <tr>
                             <th>Package</th>
                             <th>Current</th>
-                            <th>Vulnerable below</th>
+                            <th>Recommended fixed version</th>
                             <th>CVE</th>
                             <th>Severity</th>
                           </tr>
@@ -405,7 +397,7 @@ function App(): JSX.Element {
                             <tr key={`${item.packageName}-${item.cve}`}>
                               <td>{item.packageName}</td>
                               <td>{item.currentVersion}</td>
-                              <td>{item.vulnerableBelow}</td>
+                              <td>{`>= ${item.vulnerableBelow}`}</td>
                               <td>{item.cve}</td>
                               <td>{item.severity}</td>
                             </tr>

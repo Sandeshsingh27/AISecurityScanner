@@ -55,7 +55,6 @@ export interface SecurityScanReport {
 
 export interface ScanRequest {
   targetPath: string;
-  semgrepConfig: string;
   fastScan: boolean;
   llmEnabled: boolean;
   includeDependencyAudit: boolean;
